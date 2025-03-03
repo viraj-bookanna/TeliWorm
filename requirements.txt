@@ -1,0 +1,4 @@
+telethon
+python-dotenv
+pymongo
+cryptg
