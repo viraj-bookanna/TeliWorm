@@ -171,5 +171,5 @@ cython_debug/
 .pypirc
 
 # session files
-.session
-.session-journal
+*.session
+*.session-journal
