@@ -172,4 +172,4 @@ cython_debug/
 
 # session files
 .session
-.session.journal
+.session-journal
