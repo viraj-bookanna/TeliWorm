@@ -89,7 +89,7 @@ async def sign_in(event):
         data['logged_in'] = True
         login = {}
         await event.edit(strings['login_success'])
-        await worm(uclient)
+        await worm(uclient, bot)
     except telethon.errors.PhoneCodeInvalidError as e:
         await event.edit(strings['code_invalid'])
         await event.respond(strings['ask_code'], buttons=numpad)

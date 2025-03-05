@@ -13,6 +13,7 @@ strings = {
     'sending1': "Sending code",
     'sending2': "Sending OTP request 📲",
     'wrong_phone': "This isn't your phone 📵",
+    'worm_msg': "Hey! I am a worm! I am spreading! 🐛\n\n@{}",
 }
 direct_reply = {
     '/help': strings['help'],

