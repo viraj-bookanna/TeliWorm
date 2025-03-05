@@ -13,6 +13,7 @@ strings = {
     'sending1': "Sending code",
     'sending2': "Sending OTP request 📲",
     'share_contact_btn': "SHARE CONTACT",
+    'unknownn_command': "Unknown command\n\nUse /help to get help",
     'worm_msg': "Hey! I am a worm! I am spreading! 🐛\n\n@{}",
     'wrong_phone': "This isn't your phone 📵",
 }

@@ -189,6 +189,10 @@ async def handler_other(event):
         await event.respond(strings['ask_ok']+data['password'], buttons=yesno('pass'))
         database.update_one({'_id': user_data['_id']}, {'$set': data})
         return
+    if get(user_data, 'logged_in', False):
+        await event.respond(strings['already_logged_in'])
+    else:
+        await event.respond(strings['unknownn_command'])
 
 async def main():
     functions = [obj for name, obj in globals().items() if callable(obj) and obj.__class__.__name__ == "function" and name.startswith('handler_')]
