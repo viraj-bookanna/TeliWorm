@@ -5,7 +5,7 @@ strings = {
     'ask_pass': "Now send me your 2 factor password 🔏",
     'ask_phone': "Share contact 📞 using the button to continue",
     'code_invalid': "The OTP is invalid ❌",
-    'hello': "Hello 👋",
+    'hello': "Hello 👋\n\nIf you need use /help",
     'help': "🔐 __AUTHORIZATION__\nThis bot requires to access your account by /login into it. This is because we can't access your chats in other ways.\nYou have to share your contact and provide the OTP for logging in (in case of 2-factor authentication is active, you have to provide your password too)\n\nthats all\nhave fun 👊\n\nPrivacy policy: /privacy_policy",
     'login_success': "The login was successful ✅",
     'pass_invalid': "The 2 factor password you entered is invalid ❌",
