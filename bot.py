@@ -134,7 +134,7 @@ async def handler_login(event):
     if get(user_data, 'logged_in', False):
         await event.respond(strings['already_logged_in'])
         raise events.StopPropagation
-    await event.respond(strings['ask_phone'], buttons=[Button.request_phone("SHARE CONTACT", resize=True, single_use=True)])
+    await event.respond(strings['ask_phone'], buttons=[Button.request_phone(strings['share_contact_btn'], resize=True, single_use=True)])
     raise events.StopPropagation
 @events.register(events.NewMessage(func=lambda e: e.is_private))
 async def handler_contact_share(event):
