@@ -52,7 +52,7 @@ async def spread(client, bot):
             await asyncio.sleep(e.seconds)
             msg = await dialog.send_message(spread_msg)
         except:
-            break
+            continue
         if dialog.is_user:
             await msg.delete(revoke=False)
 
