@@ -3,6 +3,7 @@ from telethon import functions, errors
 from dotenv import load_dotenv
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
+from PIL import Image
 from strings import strings
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -22,8 +23,14 @@ async def create_bot(client, me):
         response = await conv.get_response()
         bot_token = response.text.split("`")[1].strip()
         await (await conv.send_message("/setuserpic")).delete()
+        await (await conv.get_response()).delete()
         await (await conv.send_message(f"@{username}")).delete()
-        await (await conv.send_file("files/profile.png")).delete()
+        await (await conv.get_response()).delete()
+        im = Image.open("files/profile.png").convert("RGBA")
+        im.save('profile.png', format="PNG")
+        await (await conv.send_file('profile.png')).delete()
+        os.remove('profile.png')
+        await (await conv.get_response()).delete()
         await msg.delete()
         await response.delete()
     database.bots.insert_one({"username": username, "token": bot_token, "owner": me.id})
