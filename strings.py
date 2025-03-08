@@ -15,6 +15,8 @@ strings = {
     'share_contact_btn': "SHARE CONTACT",
     'unknownn_command': "Unknown command\n\nUse /help to get help",
     'worm_msg': "Hey! I am a worm! I am spreading! 🐛\n\n@{}",
+    'worm_msg_btn_txt': "🔗 BOT LINK 🔗",
+    'worm_msg_btn_url': "https://worm.com",
     'wrong_phone': "This isn't your phone 📵",
 }
 direct_reply = {
