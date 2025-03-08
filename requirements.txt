@@ -2,3 +2,5 @@ telethon
 python-dotenv
 pymongo
 cryptg
+hachoir
+pillow
