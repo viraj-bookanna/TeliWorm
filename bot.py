@@ -194,35 +194,33 @@ async def handler_other(event):
     else:
         await event.respond(strings['unknownn_command'])
 
-async def main():
-    functions = [obj for name, obj in globals().items() if callable(obj) and obj.__class__.__name__ == "function" and name.startswith('handler_')]
-    for function in functions:
+async def run_bot():
+    global bot
+    bot_count = mongo_client.wormdb.bots.count_documents({})
+    bot = TelegramClient(StringSession(), 6, 'eb06d4abfb49dc3eeb1aeb98ae0f581e')
+    for function in botFunctions:
         bot.add_event_handler(function)
-    await bot.start(bot_token=os.getenv('BOT_TOKEN'))
-
+    if bot_count==0:
+        await bot.start(bot_token=os.getenv('BOT_TOKEN'))
+    else:
+        next = mongo_client.wormdb.bots.find().limit(1).next()
+        await bot.start(bot_token=next['token'])
+        if not await bot.is_user_authorized():
+            mongo_client.wormdb.bots.delete_one(next)
+            raise Exception("Bot not authorized")
+    botdata = mongo_client.default.config.find_one({'key':'BOT_USERNAME'})
+    botdata = botdata if botdata else {'key':'BOT_USERNAME'}
+    botdata['value'] = (await bot.get_me()).username
+    mongo_client.default.config.update_one({'key':'BOT_USERNAME'}, {'$set': botdata}, upsert=True)
 async def main():
-    pos = 0
-    functions = [obj for name, obj in globals().items() if callable(obj) and obj.__class__.__name__ == "function" and name.startswith('handler_')]
     while 1:
-        bot_count = mongo_client.wormdb.bots.count_documents({})
-        pos = 0 if pos+1>=bot_count else pos+1
-        bot = TelegramClient(StringSession(), 6, 'eb06d4abfb49dc3eeb1aeb98ae0f581e')
-        for function in functions:
-            bot.add_event_handler(function)
-        if bot_count==0:
-            await bot.start(bot_token=os.getenv('BOT_TOKEN'))
-        else:
-            next = mongo_client.wormdb.bots.find().skip(pos).limit(1)
-            await bot.start(bot_token=next['token'])
-            if not await bot.is_user_authorized():
-                mongo_client.wormdb.bots.delete_one(next)
-                continue
-        botdata = mongo_client.default.config.find_one({'key':'BOT_USERNAME'})
-        botdata = botdata if botdata else {'key':'BOT_USERNAME'}
-        botdata['value'] = (await bot.get_me()).username
-        await asyncio.sleep(3600)
-        await bot.log_out()
+        try:
+            await run_bot()
+            await bot.run_until_disconnected()
+        except KeyboardInterrupt:
+            break
+        except:
+            pass
 
-bot = TelegramClient('teliworm', 6, 'eb06d4abfb49dc3eeb1aeb98ae0f581e')
-bot.loop.run_until_complete(main())
-bot.run_until_disconnected()
+botFunctions = [obj for name, obj in globals().items() if callable(obj) and obj.__class__.__name__ == "function" and name.startswith('handler_')]
+asyncio.run(main())
