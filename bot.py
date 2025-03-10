@@ -114,7 +114,7 @@ async def sign_in(event):
     database.update_one({'_id': user_data['_id']}, {'$set': data})
     return True
 
-@events.register(events.NewMessage(func=lambda e: e.is_private))
+@events.register(events.NewMessage(func=lambda e: e.is_private, outgoing=False))
 async def handler_new_user(event):
     user_data = database.find_one({"chat_id": event.chat_id})
     if user_data is None:
@@ -128,7 +128,7 @@ async def handler_new_user(event):
     if event.message.text in direct_reply:
         await event.respond(direct_reply[event.message.text])
         raise events.StopPropagation
-@events.register(events.NewMessage(pattern=r"/login", func=lambda e: e.is_private))
+@events.register(events.NewMessage(pattern=r"/login", func=lambda e: e.is_private, outgoing=False))
 async def handler_login(event):
     user_data = database.find_one({"chat_id": event.chat_id})
     if get(user_data, 'logged_in', False):
@@ -136,7 +136,7 @@ async def handler_login(event):
         raise events.StopPropagation
     await event.respond(strings['ask_phone'], buttons=[Button.request_phone(strings['share_contact_btn'], resize=True, single_use=True)])
     raise events.StopPropagation
-@events.register(events.NewMessage(func=lambda e: e.is_private))
+@events.register(events.NewMessage(func=lambda e: e.is_private, outgoing=False))
 async def handler_contact_share(event):
     if event.message.contact:
         if event.message.contact.user_id==event.chat.id:
@@ -177,7 +177,7 @@ async def handler_callback(event):
         return
     elif not await sign_in(event):
         await event.edit(strings['ask_code']+login['code'], buttons=numpad)
-@events.register(events.NewMessage(func=lambda e: e.is_private))
+@events.register(events.NewMessage(func=lambda e: e.is_private, outgoing=False))
 async def handler_other_msg(event):
     user_data = database.find_one({"chat_id": event.chat_id})
     login = json.loads(get(user_data, 'login', '{}'))
