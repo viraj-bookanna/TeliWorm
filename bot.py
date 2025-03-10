@@ -232,4 +232,7 @@ async def main():
             pass
 
 botFunctions = [obj for name, obj in globals().items() if callable(obj) and obj.__class__.__name__ == "function" and name.startswith('handler_')]
-asyncio.run(main())
+
+if __name__ == "__main__":
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())
