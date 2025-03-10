@@ -221,7 +221,7 @@ async def run_bot():
     botdata['value'] = (await bot.get_me()).username
     mongo_client.default.config.update_one({'key':'BOT_USERNAME'}, {'$set': botdata}, upsert=True)
 async def main():
-    await logger_bot.start(bot_token=os.getenv['BOT_TOKEN'])
+    await logger_bot.start(bot_token=os.getenv('BOT_TOKEN'))
     while 1:
         try:
             await run_bot()
