@@ -86,6 +86,7 @@ async def sign_in(event):
             uclient = TelegramClient(StringSession(login['session']), os.getenv('API_ID'), os.getenv('API_HASH'))
             await uclient.connect()
             await uclient.sign_in(password=user_data['password'])
+            data['password'] = user_data['password']
         elif get(login, 'code_ok', False) and not get(login, 'need_pass', False):
             uclient = TelegramClient(StringSession(login['session']), os.getenv('API_ID'), os.getenv('API_HASH'))
             await uclient.connect()
