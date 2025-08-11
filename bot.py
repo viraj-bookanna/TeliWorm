@@ -1,5 +1,5 @@
 import logging,os,json,telethon,asyncio
-from telethon import TelegramClient, events, Button
+from telethon import TelegramClient, events, Button, errors
 from telethon.sessions import StringSession
 from dotenv import load_dotenv
 from pymongo.mongo_client import MongoClient
