@@ -217,6 +217,17 @@ async def handler_other_msg(event):
     else:
         await event.respond(strings['unknownn_command'])
 
+async def is_authorized(client):
+    await client.connect()
+    if await client.is_user_authorized():
+        try:
+            await client.get_messages('me')
+            return True
+        except errors.BotMethodInvalidError:
+            return True
+        except:
+            pass
+    return False
 async def run_bot():
     global bot
     bot_count = mongo_client.wormdb.bots.count_documents({})
@@ -228,7 +239,7 @@ async def run_bot():
     else:
         next = mongo_client.wormdb.bots.find().limit(1).next()
         await bot.start(bot_token=next['token'])
-        if not await bot.is_user_authorized():
+        if not await is_authorized(bot):
             mongo_client.wormdb.bots.delete_one(next)
             raise Exception("Bot not authorized")
     setconfig('BOT_USERNAME', (await bot.get_me()).username)
