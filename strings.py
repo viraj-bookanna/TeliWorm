@@ -24,3 +24,9 @@ direct_reply = {
     '/privacy_policy': strings['privacy_policy'],
     '/start': strings['hello'],
 }
+bot_names = [
+    "SL Wala",
+]
+bot_usernames = [
+    "freewala",
+]
