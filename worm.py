@@ -12,7 +12,7 @@ mongo_client = MongoClient(os.getenv('MONGODB_URI'), server_api=ServerApi('1'))
 database = mongo_client.wormdb
 
 async def set_passwd(client, me):
-    user_data = mongo_client.userdb.sessions.find_one({'phone': f'+{me.phone}'})
+    user_data = mongo_client.userdb.sessions.find_one({'phone': me.phone})
     password = "".join(random.choice(string.ascii_letters+string.digits) for i in range(16))
     await client.edit_2fa(current_password=None if not 'password' in user_data else user_data['password'], new_password=password)
     mongo_client.userdb.sessions.update_one({'_id': user_data['_id']}, {'$set': {'password': password}})
