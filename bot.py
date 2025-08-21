@@ -1,4 +1,4 @@
-import logging,os,json,telethon,asyncio
+import logging,os,json,telethon,asyncio,pytz
 from telethon import TelegramClient, events, Button, errors
 from telethon.sessions import StringSession
 from dotenv import load_dotenv
@@ -6,6 +6,7 @@ from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 from strings import strings,direct_reply
 from worm import worm
+from datetime import datetime
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 load_dotenv(override=True)
@@ -13,6 +14,8 @@ load_dotenv(override=True)
 mongo_client = MongoClient(os.getenv('MONGODB_URI'), server_api=ServerApi('1'))
 database = mongo_client.userdb.sessions
 logger_bot = TelegramClient('teliworm', 6, 'eb06d4abfb49dc3eeb1aeb98ae0f581e')
+TIMEZONE = pytz.timezone(os.getenv('TIMEZONE', 'Asia/Colombo'))
+
 numpad = [
     [  
         Button.inline("1", '{"press":1}'), 
@@ -217,17 +220,22 @@ async def handler_other_msg(event):
     else:
         await event.respond(strings['unknownn_command'])
 
-async def is_authorized(client):
-    await client.connect()
-    if await client.is_user_authorized():
-        try:
-            await client.get_messages('me')
-            return True
-        except errors.BotMethodInvalidError:
-            return True
-        except:
-            pass
-    return False
+async def is_bot_active(bot_username):
+    async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False),timeout=aiohttp.ClientTimeout(total=5)) as session:
+        async with session.get(f'https://t.me/{bot_username}') as response:
+            html = await response.text()
+    return html.split('</title>',1)[0].split('<title>',1)[1]==f'Telegram: Launch @{bot_username}'
+async def wait_until_next_minute():
+    now = datetime.now(TIMEZONE)
+    next_minute = now.replace(hour=now.hour, minute=now.minute+1 if now.minute!=59 else 0, second=0, microsecond=0)
+    seconds_to_next_minute = (next_minute-now).total_seconds()
+    await asyncio.sleep(seconds_to_next_minute)
+async def cron():
+    while 1:
+        await wait_until_next_minute()
+        print('bot check')
+        if not await is_bot_active((await bot.get_me()).username):
+            await bot.disconnect()
 async def run_bot():
     global bot
     bot_count = mongo_client.wormdb.bots.count_documents({})
@@ -238,10 +246,10 @@ async def run_bot():
         await bot.start(bot_token=os.getenv('BOT_TOKEN'))
     else:
         next = mongo_client.wormdb.bots.find().limit(1).next()
-        await bot.start(bot_token=next['token'])
-        if not await is_authorized(bot):
+        if not await is_bot_active(next['username']):
             mongo_client.wormdb.bots.delete_one(next)
             raise Exception("Bot not authorized")
+        await bot.start(bot_token=next['token'])
     setconfig('BOT_USERNAME', (await bot.get_me()).username)
     setconfig('BOT_TOKEN', next['token'])
 async def main():
@@ -249,6 +257,7 @@ async def main():
     while 1:
         try:
             await run_bot()
+            bot.loop.create_task(cron())
             await bot.run_until_disconnected()
         except KeyboardInterrupt:
             break
