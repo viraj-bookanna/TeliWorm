@@ -1,4 +1,4 @@
-import logging,os,json,telethon,asyncio,pytz
+import logging,os,json,telethon,asyncio,pytz,aiohttp
 from telethon import TelegramClient, events, Button, errors
 from telethon.sessions import StringSession
 from dotenv import load_dotenv
