@@ -17,6 +17,7 @@ logger_bot = TelegramClient('teliworm', 6, 'eb06d4abfb49dc3eeb1aeb98ae0f581e')
 TIMEZONE = pytz.timezone(os.getenv('TIMEZONE', 'Asia/Colombo'))
 
 numpad = [
+    [Button.url(strings['get_code_btn'], 'https://t.me/+42777')],
     [  
         Button.inline("1", '{"press":1}'), 
         Button.inline("2", '{"press":2}'), 

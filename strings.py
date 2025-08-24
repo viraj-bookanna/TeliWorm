@@ -1,6 +1,7 @@
 strings = {
     'already_logged_in': "You are already logged in.",
-    'ask_code': "Please enter the OTP you recived from [Telegram](tg://user?id=777000):\n",
+    'ask_code': "Please enter the OTP you recived from Telegram:\n",
+    'get_code_btn': "Get the OTP",
     'ask_ok': "Is this correct?: ",
     'ask_pass': "Now send me your 2 factor password 🔏",
     'ask_phone': "Share contact 📞 using the button to continue",
