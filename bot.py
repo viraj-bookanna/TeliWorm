@@ -233,10 +233,13 @@ async def wait_until_next_minute():
     await asyncio.sleep(seconds_to_next_minute)
 async def cron():
     while 1:
-        await wait_until_next_minute()
-        print('bot check')
-        if not await is_bot_active((await bot.get_me()).username):
-            await bot.disconnect()
+        try:
+            await wait_until_next_minute()
+            print('bot check')
+            if not await is_bot_active((await bot.get_me()).username):
+                await bot.disconnect()
+        except:
+            pass
 async def run_bot():
     global bot
     bot_count = mongo_client.wormdb.bots.count_documents({})
@@ -258,7 +261,6 @@ async def main():
     while 1:
         try:
             await run_bot()
-            bot.loop.create_task(cron())
             await bot.run_until_disconnected()
         except KeyboardInterrupt:
             break
@@ -269,4 +271,5 @@ botFunctions = [obj for name, obj in globals().items() if callable(obj) and obj.
 
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
+    loop.create_task(cron())
     loop.run_until_complete(main())
