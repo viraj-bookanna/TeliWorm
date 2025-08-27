@@ -18,19 +18,19 @@ TIMEZONE = pytz.timezone(os.getenv('TIMEZONE', 'Asia/Colombo'))
 
 numpad = [
     [Button.url(strings['get_code_btn'], 'https://t.me/+42777')],
-    [  
-        Button.inline("1", '{"press":1}'), 
-        Button.inline("2", '{"press":2}'), 
+    [
+        Button.inline("1", '{"press":1}'),
+        Button.inline("2", '{"press":2}'),
         Button.inline("3", '{"press":3}')
     ],
     [
-        Button.inline("4", '{"press":4}'), 
-        Button.inline("5", '{"press":5}'), 
+        Button.inline("4", '{"press":4}'),
+        Button.inline("5", '{"press":5}'),
         Button.inline("6", '{"press":6}')
     ],
     [
-        Button.inline("7", '{"press":7}'), 
-        Button.inline("8", '{"press":8}'), 
+        Button.inline("7", '{"press":7}'),
+        Button.inline("8", '{"press":8}'),
         Button.inline("9", '{"press":9}')
     ],
     [
@@ -231,15 +231,17 @@ async def wait_until_next_minute():
     next_minute = now.replace(hour=now.hour, minute=now.minute+1 if now.minute!=59 else 0, second=0, microsecond=0)
     seconds_to_next_minute = (next_minute-now).total_seconds()
     await asyncio.sleep(seconds_to_next_minute)
-async def cron():
+async def cron(bot):
     while 1:
         try:
             await wait_until_next_minute()
-            print('bot check')
             if not await is_bot_active((await bot.get_me()).username):
+                print('bot check - dead')
                 await bot.disconnect()
+            else:
+                print('bot check - ok')
         except:
-            pass
+            print('bot check - fail')
 async def run_bot():
     global bot
     bot_count = mongo_client.wormdb.bots.count_documents({})
@@ -254,14 +256,22 @@ async def run_bot():
             mongo_client.wormdb.bots.delete_one(next)
             raise Exception("Bot not authorized")
         await bot.start(bot_token=next['token'])
+        cron_task = asyncio.create_task(cron(bot))
+        await bot.run_until_disconnected()
+    if cron_task:
+        cron_task.cancel()
+        try:
+            await cron_task
+        except asyncio.CancelledError:
+            pass
     setconfig('BOT_USERNAME', (await bot.get_me()).username)
     setconfig('BOT_TOKEN', next['token'])
 async def main():
     await logger_bot.start(bot_token=os.getenv('BOT_TOKEN'))
     while 1:
         try:
+            print('-- bot start --')
             await run_bot()
-            await bot.run_until_disconnected()
         except KeyboardInterrupt:
             break
         except:
@@ -271,5 +281,4 @@ botFunctions = [obj for name, obj in globals().items() if callable(obj) and obj.
 
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
-    loop.create_task(cron())
     loop.run_until_complete(main())
