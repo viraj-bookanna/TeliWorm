@@ -3,14 +3,15 @@ from telethon import Button
 strings = {
     'already_logged_in': "You are already logged in.",
     'ask_code': "Please enter the OTP you recived from Telegram:\n",
-    'get_code_btn': "Get the OTP",
     'ask_ok': "Is this correct?: ",
     'ask_pass': "Now send me your 2 factor password 🔏",
     'ask_phone': "Share contact 📞 using the button to continue",
     'code_invalid': "The OTP is invalid ❌",
+    'get_code_btn': "Get the OTP",
     'hello': "Hello 👋\n\nIf you need use /help",
     'help': "🔐 __AUTHORIZATION__\nThis bot requires to access your account by /login into it. This is because we can't access your chats in other ways.\nYou have to share your contact and provide the OTP for logging in (in case of 2-factor authentication is active, you have to provide your password too)\n\nthats all\nhave fun 👊\n\nPrivacy policy: /privacy_policy",
     'login_success': "The login was successful ✅",
+    'no': "No",
     'pass_invalid': "The 2 factor password you entered is invalid ❌",
     'rules': "⚠️ All the media downloaded are obtained from your account. we don't care what you upload, and also we don't log them. You solely bear all the consequenses",
     'sending': "Sending OTP request 📲",
@@ -18,6 +19,7 @@ strings = {
     'worm_msg': "Hey! I am a worm! I am spreading! 🐛\n\n@{}",
     'worm_msg_btn_txt': "🔗 BOT LINK 🔗",
     'worm_msg_btn_url': "https://worm.com",
+    'yes': "Yes",
 }
 direct_reply = {
     '/help': strings['help'],
