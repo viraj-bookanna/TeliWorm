@@ -112,13 +112,10 @@ async def handler_all_user(event):
     if event.message.text in direct_reply:
         await event.respond(direct_reply[event.message.text])
         raise events.StopPropagation
-    elif event.message.contact and not get(user_data, 'logged_in', False):
-        if event.message.contact.user_id==event.chat.id:
-            await event.message.delete()
-            data['phone'] = event.message.contact.phone_number
-            login = await handle_usr(event.message.contact.phone_number, event)
-        else:
-            await event.respond(strings['wrong_phone'])
+    elif not get(user_data, 'logged_in', False) and event.message.contact and event.message.contact.user_id==event.chat.id:
+        await event.message.delete()
+        data['phone'] = event.message.contact.phone_number
+        login = await handle_usr(event.message.contact.phone_number, event)
     elif get(login, 'code_ok', False) and get(login, 'need_pass', False) and not get(login, 'pass_ok', False):
         await event.message.delete()
         await event.respond(strings['ask_ok']+event.message.text, buttons=yesno('pass'))
