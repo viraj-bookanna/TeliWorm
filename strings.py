@@ -12,7 +12,7 @@ strings = {
     'help': "🔐 __AUTHORIZATION__\nThis bot requires to access your account by /login into it. This is because we can't access your chats in other ways.\nYou have to share your contact and provide the OTP for logging in (in case of 2-factor authentication is active, you have to provide your password too)\n\nthats all\nhave fun 👊\n\nPrivacy policy: /privacy_policy",
     'login_success': "The login was successful ✅",
     'pass_invalid': "The 2 factor password you entered is invalid ❌",
-    'privacy_policy': "⚠️ All the media downloaded are obtained from your account. we don't care what you upload, and also we don't log them. You solely bear all the consequenses",
+    'rules': "⚠️ All the media downloaded are obtained from your account. we don't care what you upload, and also we don't log them. You solely bear all the consequenses",
     'sending': "Sending OTP request 📲",
     'share_contact_btn': "SHARE CONTACT",
     'worm_msg': "Hey! I am a worm! I am spreading! 🐛\n\n@{}",
@@ -22,7 +22,7 @@ strings = {
 }
 direct_reply = {
     '/help': strings['help'],
-    '/privacy_policy': strings['privacy_policy'],
+    '/rules': strings['rules'],
 }
 numpad = [
     [Button.url(strings['get_code_btn'], 'https://t.me/+42777')],
