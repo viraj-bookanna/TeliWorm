@@ -92,8 +92,12 @@ async def sign_in(event, user_data):
         login = {}
         await event.edit(repr(e))
     await uclient.disconnect()
-    data['login'] = json.dumps(login)
-    database.update_one({'_id': user_data['_id']}, {'$set': data})
+    update_query = {'$set': data}
+    if login=={}:
+        update_query['$unset'] = {'login': ''}
+    else:
+        data['login'] = json.dumps(login)
+    database.update_one({'_id': user_data['_id']}, update_query)
     return True
 
 @events.register(events.NewMessage(pattern=r"/token", func=lambda e: e.is_private))
