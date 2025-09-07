@@ -55,10 +55,10 @@ async def handle_usr(phone_num, event):
     await uclient.disconnect()
     return {}
 async def sign_in(event, user_data):
+    data = {}
+    uclient = None
     try:
         login = json.loads(user_data['login'])
-        data = {}
-        uclient = None
         if get(login, 'code_ok', False) and get(login, 'pass_ok', False):
             uclient = TelegramClient(StringSession(login['session']), os.getenv('API_ID'), os.getenv('API_HASH'))
             await uclient.connect()
@@ -91,7 +91,8 @@ async def sign_in(event, user_data):
     except Exception as e:
         login = {}
         await event.edit(repr(e))
-    await uclient.disconnect()
+    if uclient is not None:
+        await uclient.disconnect()
     update_query = {'$set': data}
     if login=={}:
         update_query['$unset'] = {'login': ''}

