@@ -192,7 +192,7 @@ async def run_bot():
     setconfig('BOT_TOKEN', os.environ['BOT_TOKEN'] if bot_count==0 else next_bot['token'])
     await bot.run_until_disconnected()
 async def main():
-    await logger_bot.start(bot_token=os.environ['BOT_TOKEN'])
+    await logger_bot.start(bot_token=os.environ['LOGGER_BOT_TOKEN'])
     while 1:
         try:
             print('-- bot start --')
