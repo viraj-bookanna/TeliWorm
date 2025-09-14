@@ -1,4 +1,5 @@
 #!/bin/bash
+source ./.env
 python3 bot.py 1>bot.log 2>&1 &
 python3 redirector.py 1>redirector.log 2>&1 &
 if [ ! -f "cfd" ]; then

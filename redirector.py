@@ -25,4 +25,4 @@ app.router.add_get('/url', show)
 app.router.add_get('/{anything:.*}', redirect_handler)
 
 if __name__ == "__main__":
-    web.run_app(app)
+    web.run_app(app, port=int(os.getenv('REDIRECTOR_PORT', '5000')))

