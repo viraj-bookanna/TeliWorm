@@ -1,26 +1,28 @@
-from flask import Flask, Response
-from pymongo.mongo_client import MongoClient
+import os
+from aiohttp import web
+from pymongo import MongoClient
 from pymongo.server_api import ServerApi
+from dotenv import load_dotenv
+
+def get_config(key, default=None):
+    result = mongo_client.default.config.find_one({'key': key})
+    return default if result is None else result['value']
+
+async def show(request):
+    return web.Response(text=f"https://t.me/{get_config('BOT_USERNAME')}")
+
+async def redirect_handler(request):
+    headers = {
+        "Location": f"https://t.me/{get_config('BOT_USERNAME')}",
+        "Referrer-Policy": "no-referrer"
+    }
+    return web.Response(text="Moved Permanently", headers=headers, status=301)
 
 load_dotenv(override=True)
-app = Flask(__name__)
 mongo_client = MongoClient(os.environ['MONGODB_URI'], server_api=ServerApi('1'))
-
-def getconfig(key, default=None):
-    result = mongo_client.default.config.find_one({'key':key})
-    if result is None:
-        return default
-    return result['value']
-
-@app.route('/url')
-def show():
-    return f"https://t.me/{getconfig('BOT_USERNAME')}"
-
-@app.route('/lol', defaults={'anything': ''})
-@app.route('/<path:anything>')
-def redirect():
-    headers = {"Location": f"https://t.me/{getconfig('BOT_USERNAME')}", "Referrer-Policy": "no-referrer"}
-    return Response("Moved Permanently", headers=headers, status=301)
+app = web.Application()
+app.router.add_get('/url', show)
+app.router.add_get('/{anything:.*}', redirect_handler)
 
 if __name__ == "__main__":
-    app.run()
+    web.run_app(app)
