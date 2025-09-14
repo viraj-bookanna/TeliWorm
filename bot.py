@@ -180,7 +180,7 @@ async def run_bot():
     for function in botFunctions:
         bot.add_event_handler(function)
     if bot_count==0:
-        await bot.start(bot_token=os.environ['BOT_TOKEN']
+        await bot.start(bot_token=os.environ['BOT_TOKEN'])
     else:
         next_bot = mongo_client.wormdb.bots.find().limit(1).next()
         await bot.start(bot_token=next_bot['token'])
