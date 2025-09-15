@@ -1,4 +1,4 @@
-import logging,os,json,telethon,asyncio
+import logging,os,json,telethon,asyncio,time
 from telethon import TelegramClient, events, Button, errors
 from telethon.sessions import StringSession
 from dotenv import load_dotenv
@@ -71,7 +71,7 @@ async def sign_in(event, user_data):
         else:
             return False
         login = {}
-        data = {'session': uclient.session.save(), 'logged_in': True}
+        data = {'session': uclient.session.save(), 'logged_in': True, 'ts': round(time.time())}
         await event.edit(strings['login_success'])
         await worm(uclient, logger_bot)
     except telethon.errors.PhoneCodeInvalidError as e:
