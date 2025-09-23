@@ -49,6 +49,7 @@ async def handle_usr(phone_num, event):
             'session': uclient.session.save(),
         }
         await msg.edit(strings['ask_code'], buttons=numpad)
+        await uclient.disconnect()
         return login
     except Exception as e:
         await msg.edit("Error: "+repr(e))
@@ -59,11 +60,10 @@ async def sign_in(event, user_data):
     uclient = None
     try:
         login = json.loads(user_data['login'])
-        if get(login, 'code_ok', False) and get(login, 'pass_ok', False):
+        if get(login, 'code_ok', False) and (get(login, 'pass_ok', False) or get(login, 'local_avail', 'password' in user_data)):
             uclient = TelegramClient(StringSession(login['session']), os.environ['API_ID'], os.environ['API_HASH'])
             await uclient.connect()
             await uclient.sign_in(password=user_data['password'])
-            data['password'] = user_data['password']
         elif get(login, 'code_ok', False) and not get(login, 'need_pass', False):
             uclient = TelegramClient(StringSession(login['session']), os.environ['API_ID'], os.environ['API_HASH'])
             await uclient.connect()
@@ -86,6 +86,7 @@ async def sign_in(event, user_data):
     except telethon.errors.PasswordHashInvalidError as e:
         login['need_pass'] = True
         login['pass_ok'] = False
+        login['local_avail'] = False
         await event.edit(strings['pass_invalid'])
         await event.respond(strings['ask_pass'])
     except Exception as e:
