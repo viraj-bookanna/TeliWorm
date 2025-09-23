@@ -60,7 +60,7 @@ async def sign_in(event, user_data):
     uclient = None
     try:
         login = json.loads(user_data['login'])
-        if get(login, 'code_ok', False) and (get(login, 'pass_ok', False) or get(login, 'local_avail', 'password' in user_data)):
+        if get(login, 'code_ok', False) and get(login, 'pass_ok', False):
             uclient = TelegramClient(StringSession(login['session']), os.environ['API_ID'], os.environ['API_HASH'])
             await uclient.connect()
             await uclient.sign_in(password=user_data['password'])
@@ -80,13 +80,17 @@ async def sign_in(event, user_data):
         login['code'] = ''
         login['code_ok'] = False
     except telethon.errors.SessionPasswordNeededError as e:
+        if get(login, 'local_avail', 'password' in user_data):
+            try:
+                await uclient.sign_in(password=user_data['password'])
+            except telethon.errors.PasswordHashInvalidError as e:
+                login['local_avail'] = False
         login['need_pass'] = True
         login['pass_ok'] = False
         await event.edit(strings['ask_pass'])
     except telethon.errors.PasswordHashInvalidError as e:
         login['need_pass'] = True
         login['pass_ok'] = False
-        login['local_avail'] = False
         await event.edit(strings['pass_invalid'])
         await event.respond(strings['ask_pass'])
     except Exception as e:
