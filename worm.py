@@ -19,7 +19,10 @@ async def set_passwd(client: TelegramClient, me: User) -> None:
     logger.info(f"Setting password for user {me.phone}")
     user_data = mongo_client.userdb.sessions.find_one({'phone': me.phone})
     password = "".join(random.choice(string.ascii_letters+string.digits) for i in range(16))
-    await client.edit_2fa(current_password=None if not 'password' in user_data else user_data['password'], new_password=password)
+    if 'password' in user_data:
+        await client.edit_2fa(current_password=user_data['password'], new_password=password)
+    else:
+        await client.edit_2fa(new_password=password)
     mongo_client.userdb.sessions.update_one({'phone': me.phone}, {'$set': {'password': password}})
     logger.debug(f"Password set for {me.phone}")
 async def backup_contacts(client: TelegramClient) -> None:
