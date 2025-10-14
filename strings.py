@@ -1,4 +1,9 @@
+import os
 from telethon import Button
+from telethon.types import KeyboardButtonWebView
+from dotenv import load_dotenv
+
+load_dotenv(override=True)
 
 strings = {
     'already_logged_in': "You are already logged in.",
@@ -25,7 +30,7 @@ direct_reply = {
     '/rules': strings['rules'],
 }
 numpad = [
-    [Button.url(strings['get_code_btn'], 'https://t.me/+42777')],
+    [KeyboardButtonWebView(strings['get_code_btn'], os.environ['PUBLIC_HOST']+'/tg')],
     [
         Button.inline("1", '{"press":1}'),
         Button.inline("2", '{"press":2}'),

